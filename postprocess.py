@@ -31,6 +31,8 @@ class Record:
         self.match2=self.parseTuple(tuple2)
         self.deleted=deleted=="EXON_DELETED"
         self.sameStrands=strand=="+"
+    def getKey(self):
+        return self.match1.toString()+" "+self.match2.toString()
     def print(self):
         match1=self.match1
         match2=self.match2
@@ -44,6 +46,21 @@ class Record:
             raise Exception("Can't parse: "+tuple1)
         return Tuple(rex[1],int(rex[2]),int(rex[3]))
 
+def findBestGuides(records):
+    counts={}
+    for rec in records:
+        if(not rec.deleted): continue
+        counts[rec.match1.guide]=counts.get(rec.match1.guide,0)+1
+        counts[rec.match2.guide]=counts.get(rec.match2.guide,0)+1
+    array=[]
+    for key in counts.keys():
+        count=counts[key]
+        array.append([key,count])
+    array.sort(key=lambda x: x[1],reverse=True)
+    for elem in array:
+        (guide,count)=elem
+        print(guide,count,sep="\t")
+
 def findBestExamples(records):
     records.sort(key=
                  lambda x: 1/(1+x.match1.distance) * 1/(1+x.match2.distance) * \
@@ -52,8 +69,6 @@ def findBestExamples(records):
                  reverse=True)
     for i in range(100):
         records[i].print()
-        
-
 
 def countDeleted(records):
     n=0
@@ -85,6 +100,7 @@ def countGuidePairs(records):
     for rec in array:
         print(rec[0],rec[1],sep="\t")
 
+
 #=========================================================================
 # main()
 #=========================================================================
@@ -94,13 +110,16 @@ if(len(sys.argv)!=2):
 
 # Read records
 records=[]
+seen=set()
 with open(filename,"rt") as IN:
     for line in IN:
         fields=line.rstrip("\n").split("\t")
         if(len(fields)!=5): raise Exception(line)
         (readID,tuple1,tuple2,strand,deleted)=fields
         rec=Record(readID,tuple1,tuple2,deleted,strand)
-        records.append(rec)
+        key=rec.getKey()
+        if(key not in seen): records.append(rec)
+        seen.add(key)
 
 # Compute statistics
 n=len(records)
@@ -116,6 +135,8 @@ print("percent different strand: ",percentDiffStrand*100,"% = ",
 countGuidePairs(records)
 
 findBestExamples(records)
+
+findBestGuides(records)
 
 # M03884:303:000000000-C4RM6:1:1111:23549:4101	V_51_28 [D=9] L=90	V_50_29 [D=11] L=60	EXON_DELETED
 
