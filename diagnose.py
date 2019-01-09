@@ -118,24 +118,23 @@ def findUnaligned(unaligned,genome,revGenome):
     (readPos,genomePos,matchLen)=longest
     strand="+"
     if(matchLen<MIN_MATCH):
-        unaligned=Translation.reverseComplement(unaligned)
-        cigar=CigarString(smithWaterman(unaligned,genome,GAP_OPEN,
+        cigar=CigarString(smithWaterman(unaligned,revGenome,GAP_OPEN,
                                          GAP_EXTEND))
         longest=longestMatchFromCigar(cigar)
         if(longest is None): return None
         (readPos,genomePos,matchLen)=longest
-        readPos=len(unaligned)-readPos-1 ###
         if(matchLen<MIN_MATCH): return None
+        genome=revGenome
         strand="-"
     if(readPos<0): raise Exception("error")
-    #readSubseq=unaligned[readPos:(readPos+matchLen)]
-    #genomeSubseq=genome[genomePos:(genomePos+matchLen)]
-    #if(readSubseq!=genomeSubseq):
-    #    #return None
-    #    print("UNALIGNED PORTION:")
-    #    print(cigar.toString())
-    #    print(readSubseq+"\n"+genomeSubseq+"\n==========================")
-    #    exit()
+    readSubseq=unaligned[readPos:(readPos+matchLen)]
+    genomeSubseq=genome[genomePos:(genomePos+matchLen)]
+    if(readSubseq!=genomeSubseq):
+        return None
+        #print("UNALIGNED PORTION:")
+        #print(cigar.toString())
+        #print(readSubseq+"\n"+genomeSubseq+"\n==========================")
+        #exit()
     return (genomePos,strand,matchLen)
 
 def getAlignedIntervals(rec):
@@ -206,52 +205,17 @@ def smithWaterman(seq1,seq2,gapOpen,gapExtend):
 # main()
 #=========================================================================
 if(len(sys.argv)!=3):
-    exit(ProgramName.get()+" <filename.sam> <target-sites.txt>\n")
-(samFile,targetFile)=sys.argv[1:]
+    exit(ProgramName.get()+" <read-ID> <sam-file>\n")
+(readID,samFile)=sys.argv[1:]
 
 # Load genomic sequence
 (Def,genome)=FastaReader.firstSequence(GENOME)
-#revGenome=Translation.reverseComplement(genome)
-revGenome=None
-
-# Load target locations
-targets=loadTargets(targetFile)
-
-# Process SAM file
-readsSeen=set()
+revGenome=Translation.reverseComplement(genome)
 reader=SamReader(samFile)
 while(True):
     rec=reader.nextSequence()
     if(rec is None): break
-    if(rec.flag_unmapped()): continue
-    if(rec.CIGAR.completeMatch()): continue
-    if(not goodCigar(rec.CIGAR)): continue
-    if(rec.ID in readsSeen): continue
-    #firstAlignStrand="-" if rec.flag_revComp() else "+"
-    (breakpoint,anchorLen1)=findBreakpoint(rec)
-    nearestTarget1=findTarget(targets,breakpoint)
-    distance1=abs(breakpoint-nearestTarget1.pos)
-    if(distance1>MAX_DISTANCE): continue
-
-    # Sanity check: print out the alignment to make sure it really aligns
-    if(not sanityCheckAlignment(rec,genome)): continue
-
-    # Try to align the unaligned part to the other intron
-    unaligned=getUnaligned(rec)
-    unalignedPos=findUnaligned(unaligned,genome,revGenome)
-    if(unalignedPos is None): continue
-    (pos,strand2,anchorLen2)=unalignedPos
-    nearestTarget2=findTarget(targets,pos)
-    distance2=abs(pos-nearestTarget2.pos)
-    if(distance2>MAX_DISTANCE): continue
-    exonDeleted="EXON_DELETED" if nearestTarget1.intron!=nearestTarget2.intron\
-        else ""
-    print(rec.getID(),"\t",
-          nearestTarget1.ID," [D=",distance1,"] L=",anchorLen1,"\t",
-          nearestTarget2.ID," [D=",distance2,"] L=",anchorLen2,"\t",
-          strand2,"\t",exonDeleted,
-          sep="")
-    readsSeen.add(rec.ID)
-
+    if(rec.ID!=readID): continue
+    print("found it")
 
 
