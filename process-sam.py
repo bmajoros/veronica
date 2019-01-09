@@ -11,13 +11,28 @@ from builtins import (bytes, dict, int, list, object, range, str, ascii,
 # The above imports should allow this program to run in both Python 2 and
 # Python 3.  You might need to update your version of module "future".
 import sys
+import os
 import ProgramName
 from SamReader import SamReader
 from FastaReader import FastaReader
+from FastaWriter import FastaWriter
+from Translation import Translation
+from Interval import Interval
+from Pipe import Pipe
+from Rex import Rex
+rex=Rex()
+import TempFilename
+from CigarString import CigarString
 
+BOOM="/home/bmajoros/BOOM"
+MATRIX="/home/bmajoros/alignment/matrices/NUC.4.4"
+GAP_OPEN=2
+GAP_EXTEND=1
 MIN_SOFT_MASK=16
+MIN_MATCH=16
 MAX_DISTANCE=25
 GENOME="/home/bmajoros/veronica/exon51.fasta"
+FASTA_WRITER=FastaWriter()
 
 class Target:
     def __init__(self,ID,pos,seq):
@@ -65,17 +80,119 @@ def getUnaligned(rec):
     cigar=rec.CIGAR
     if(cigar[0].op=="S"):
         return seq[:cigar[0].length]
-    if(cigar[1].op=="S"):
+    if(cigar[0].op=="M" and cigar[1].op=="S"):
         return seq[cigar[0].length:]
     else: raise Exception("internal error")
 
-def findUnaligned(unaligned,genome):
+def findUnaligned_OLD(unaligned,genome,revGenome):
     L=len(genome)
     querylen=len(unaligned)
     last=L-querylen
+    # Search forward strand:
     for i in range(last):
         if(genome[i:(i+querylen)]==unaligned):
             return i
+    # Search reverse strand:
+    for i in range(last):
+        if(revGenome[i:(i+querylen)]==unaligned):
+            return L-i-1
+
+def longestMatchFromCigar(cigar):
+    L=cigar.length()
+    longestOpIndex=None
+    longestOpLen=0
+    for i in range(L):
+        op=cigar[i]
+        if(op.getOp()!="M"): continue
+        opLen=op.getLength()
+        if(opLen>longestOpLen):
+            longestOpLen=opLen
+            longestOpIndex=i
+    if(longestOpIndex is None): return None
+    readPos=0; genomePos=0
+    for i in range(longestOpIndex):
+        op=cigar[i]
+        opLen=op.getLength()
+        if(op.advanceInQuery()): readPos+=opLen
+        if(op.advanceInRef()): genomePos+=opLen
+    return [readPos,genomePos,longestOpLen]
+
+def findUnaligned(unaligned,genome,revGenome):
+    cigar=CigarString(smithWaterman(unaligned,genome,GAP_OPEN,GAP_EXTEND))
+    longest=longestMatchFromCigar(cigar)
+    if(longest is None): longest=(-1,-1,-1)
+    (readPos,genomePos,matchLen)=longest
+    strand="+"
+    if(matchLen<MIN_MATCH):
+        cigar=CigarString(smithWaterman(unaligned,revGenome,GAP_OPEN,
+                                         GAP_EXTEND))
+        longest=longestMatchFromCigar(cigar)
+        if(longest is None): return None
+        (readPos,genomePos,matchLen)=longest
+        if(matchLen<MIN_MATCH): return None
+        genome=revGenome
+        strand="-"
+    if(readPos<0): raise Exception("error")
+    readSubseq=unaligned[readPos:(readPos+matchLen)]
+    genomeSubseq=genome[genomePos:(genomePos+matchLen)]
+    if(readSubseq!=genomeSubseq):
+        print("UNALIGNED PORTION:")
+        print(cigar.toString())
+        print(readSubseq+"\n"+genomeSubseq+"\n==========================")
+        exit()
+    return (genomePos,strand)
+
+def getAlignedIntervals(rec):
+    readPos=0
+    genomePos=rec.refPos
+    cigar=rec.CIGAR
+    for i in range(cigar.length()):
+        op=cigar[i]
+        if(op.op=="M"):
+            readInterval=Interval(readPos,readPos+op.length)
+            genomeInterval=Interval(genomePos,genomePos+op.length)
+            return [readInterval,genomeInterval]
+        if(op.advanceInQuery()): readPos+=op.length
+        if(op.advanceInRef()): genomePos+=op.length
+    return None
+
+def sanityCheckAlignment(rec,genome):
+    intervals=getAlignedIntervals(rec)
+    (readPos,genomePos)=intervals
+    readSeq=rec.getSequence()[readPos.getBegin():readPos.getEnd()]
+    genomeSeq=genome[genomePos.getBegin():genomePos.getEnd()]
+    if(readSeq!=genomeSeq):
+        print("MAIN READ ALIGNMENT")
+        print(readSeq+"\n"+genomeSeq+"\n=============================")
+
+def writeFile(defline,seq):
+    filename=TempFilename.generate("fasta")
+    FASTA_WRITER.writeFasta(defline,seq,filename)
+    return filename
+
+def swapInsDel(cigar):
+    # This is done because my aligner defines insertions and deletions
+    # opposite to how they're defined in the SAM specification
+    newCigar=""
+    for x in cigar:
+        if(x=="I"): x="D"
+        elif(x=="D"): x="I"
+        newCigar+=x
+    return newCigar
+
+def smithWaterman(seq1,seq2,gapOpen,gapExtend):
+    file1=writeFile("read",seq1)
+    file2=writeFile("genome",seq2)
+    cmd=BOOM+"/smith-waterman -q "+MATRIX+" "+str(gapOpen)+" "+\
+        str(gapExtend)+" "+file1+" "+file2+" DNA"
+    output=Pipe.run(cmd)
+    os.remove(file1)
+    os.remove(file2)
+    if(not rex.find("CIGAR=(\S+)",output)):
+        raise Exception("Can't parse aligner output: "+output)
+    cigar=rex[1]
+    cigar=swapInsDel(cigar) # because my aligner defines cigars differently
+    return cigar
 
 #=========================================================================
 # main()
@@ -86,6 +203,7 @@ if(len(sys.argv)!=3):
 
 # Load genomic sequence
 (Def,genome)=FastaReader.firstSequence(GENOME)
+revGenome=Translation.reverseComplement(genome)
 
 # Load target locations
 targets=loadTargets(targetFile)
@@ -104,25 +222,17 @@ while(True):
     distance=abs(breakpoint-nearestTarget.pos)
     if(distance>MAX_DISTANCE): continue
 
+    # Sanity check: print out the alignment to make sure it really aligns
+    sanityCheckAlignment(rec,genome)
+
     # Try to align the unaligned part to the other intron
     unaligned=getUnaligned(rec)
-    pos=findUnaligned(unaligned,genome)
-    print(breakpoint,pos,sep="\t")
+    #if(len(unaligned)<MIN_SOFT_MASK): raise Exception("error")
+    unalignedPos=findUnaligned(unaligned,genome,revGenome)
+    (pos,strand)=unalignedPos if unalignedPos is not None else (None,"")
+    print(breakpoint,str(pos)+strand,sep="\t")
     #print(rec.ID,unaligned,sep="\t")
 
-    #print(nearestTarget.pos,breakpoint,sep="\t")
-    #print(rec.ID,rec.CIGAR.toString(),
-          #"mult="+str(rec.flag_hasMultipleSegments()),
-          #"aligned="+str(rec.flag_properlyAligned()),
-          #"unmapped="+str(rec.flag_unmapped()),
-          #"first="+str(rec.flag_firstOfPair()),
-          #"second="+str(rec.flag_secondOfPair()),
-          #"rev="+str(rec.flag_revComp()),
-          #"secondary="+str(rec.flag_secondaryAlignment()),
-          #"failed="+str(rec.flag_failedFilters()),
-          #"dup="+str(rec.flag_PCRduplicate()),
-          #"suppl="+str(rec.flag_supplAlignment()),
-          #sep="\t")
 
 
 
