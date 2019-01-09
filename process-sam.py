@@ -158,9 +158,11 @@ def sanityCheckAlignment(rec,genome):
     genomeSeq=genome[genomePos.getBegin():genomePos.getEnd()]
     if(readSeq!=genomeSeq and 
        getMatchProportion(readSeq,genomeSeq)<0.9):
-        print("MAIN READ ALIGNMENT")
-        print(readSeq+"\n"+genomeSeq+"\n=============================")
-        raise Exception("bad alignment")
+        #print("MAIN READ ALIGNMENT")
+        #print(readSeq+"\n"+genomeSeq+"\n=============================")
+        #raise Exception("bad alignment")
+        return False
+    return True
 
 def getMatchProportion(seq1,seq2):
     nMatch=0
@@ -230,13 +232,13 @@ while(True):
     if(distance1>MAX_DISTANCE): continue
 
     # Sanity check: print out the alignment to make sure it really aligns
-    sanityCheckAlignment(rec,genome)
+    if(not sanityCheckAlignment(rec,genome)): continue
 
     # Try to align the unaligned part to the other intron
     unaligned=getUnaligned(rec)
     unalignedPos=findUnaligned(unaligned,genome,revGenome)
     if(unalignedPos is None): continue
-    (pos,strand,anchorLen2)=unalignedPos
+    (pos,strand2,anchorLen2)=unalignedPos
     nearestTarget2=findTarget(targets,pos)
     distance2=abs(pos-nearestTarget2.pos)
     if(distance2>MAX_DISTANCE): continue
@@ -245,7 +247,7 @@ while(True):
     print(rec.getID(),"\t",
           nearestTarget1.ID," [D=",distance1,"] L=",anchorLen1,"\t",
           nearestTarget2.ID," [D=",distance2,"] L=",anchorLen2,"\t",
-          exonDeleted,
+          strand2,"\t",exonDeleted,
           sep="")
     readsSeen.add(rec.ID)
 
