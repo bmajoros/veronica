@@ -39,6 +39,9 @@ class Target:
         self.ID=ID
         self.pos=pos
         self.seq=seq
+        if(not rex.find("V_(\d+)_\d+",ID)):
+            raise Exception("Can't parse target ID")
+        self.intron=rex[1]
 
 def softMaskLength(cigar):
     for op in cigar.ops:
@@ -53,7 +56,11 @@ def goodCigar(cigar):
     return True
 
 def findBreakpoint(rec):
-    return rec.refPos+rec.CIGAR[0].length
+    matchLen=0
+    for op in rec.CIGAR.ops:
+        if(op.getOp()=="M"): matchLen=op.getLength()
+    begin=rec.refPos+rec.CIGAR[0].length
+    return (begin,matchLen)
 
 def loadTargets(filename):
     targets=[]
@@ -83,19 +90,6 @@ def getUnaligned(rec):
     if(cigar[0].op=="M" and cigar[1].op=="S"):
         return seq[cigar[0].length:]
     else: raise Exception("internal error")
-
-def findUnaligned_OLD(unaligned,genome,revGenome):
-    L=len(genome)
-    querylen=len(unaligned)
-    last=L-querylen
-    # Search forward strand:
-    for i in range(last):
-        if(genome[i:(i+querylen)]==unaligned):
-            return i
-    # Search reverse strand:
-    for i in range(last):
-        if(revGenome[i:(i+querylen)]==unaligned):
-            return L-i-1
 
 def longestMatchFromCigar(cigar):
     L=cigar.length()
@@ -136,11 +130,12 @@ def findUnaligned(unaligned,genome,revGenome):
     readSubseq=unaligned[readPos:(readPos+matchLen)]
     genomeSubseq=genome[genomePos:(genomePos+matchLen)]
     if(readSubseq!=genomeSubseq):
-        print("UNALIGNED PORTION:")
-        print(cigar.toString())
-        print(readSubseq+"\n"+genomeSubseq+"\n==========================")
-        exit()
-    return (genomePos,strand)
+        return None
+        #print("UNALIGNED PORTION:")
+        #print(cigar.toString())
+        #print(readSubseq+"\n"+genomeSubseq+"\n==========================")
+        #exit()
+    return (genomePos,strand,matchLen)
 
 def getAlignedIntervals(rec):
     readPos=0
@@ -161,9 +156,19 @@ def sanityCheckAlignment(rec,genome):
     (readPos,genomePos)=intervals
     readSeq=rec.getSequence()[readPos.getBegin():readPos.getEnd()]
     genomeSeq=genome[genomePos.getBegin():genomePos.getEnd()]
-    if(readSeq!=genomeSeq):
+    if(readSeq!=genomeSeq and 
+       getMatchProportion(readSeq,genomeSeq)<0.9):
         print("MAIN READ ALIGNMENT")
         print(readSeq+"\n"+genomeSeq+"\n=============================")
+        raise Exception("bad alignment")
+
+def getMatchProportion(seq1,seq2):
+    nMatch=0
+    nMismatch=0
+    for i in range(len(seq1)):
+        if(seq1[i]==seq2[i]): nMatch+=1
+        else: nMismatch+=1
+    return float(nMatch)/float(nMatch+nMismatch)
 
 def writeFile(defline,seq):
     filename=TempFilename.generate("fasta")
@@ -209,6 +214,7 @@ revGenome=Translation.reverseComplement(genome)
 targets=loadTargets(targetFile)
 
 # Process SAM file
+readsSeen=set()
 reader=SamReader(samFile)
 while(True):
     rec=reader.nextSequence()
@@ -216,23 +222,32 @@ while(True):
     if(rec.flag_unmapped()): continue
     if(rec.CIGAR.completeMatch()): continue
     if(not goodCigar(rec.CIGAR)): continue
-    #print(rec.ID,rec.CIGAR.toString(),sep="\t")
-    breakpoint=findBreakpoint(rec)
-    nearestTarget=findTarget(targets,breakpoint)
-    distance=abs(breakpoint-nearestTarget.pos)
-    if(distance>MAX_DISTANCE): continue
+    if(rec.ID in readsSeen): continue
+    #firstAlignStrand="-" if rec.flag_revComp() else "+"
+    (breakpoint,anchorLen1)=findBreakpoint(rec)
+    nearestTarget1=findTarget(targets,breakpoint)
+    distance1=abs(breakpoint-nearestTarget1.pos)
+    if(distance1>MAX_DISTANCE): continue
 
     # Sanity check: print out the alignment to make sure it really aligns
     sanityCheckAlignment(rec,genome)
 
     # Try to align the unaligned part to the other intron
     unaligned=getUnaligned(rec)
-    #if(len(unaligned)<MIN_SOFT_MASK): raise Exception("error")
     unalignedPos=findUnaligned(unaligned,genome,revGenome)
-    (pos,strand)=unalignedPos if unalignedPos is not None else (None,"")
-    print(breakpoint,str(pos)+strand,sep="\t")
-    #print(rec.ID,unaligned,sep="\t")
-
+    if(unalignedPos is None): continue
+    (pos,strand,anchorLen2)=unalignedPos
+    nearestTarget2=findTarget(targets,pos)
+    distance2=abs(pos-nearestTarget2.pos)
+    if(distance2>MAX_DISTANCE): continue
+    exonDeleted="EXON_DELETED" if nearestTarget1.intron!=nearestTarget2.intron\
+        else ""
+    print(rec.getID(),"\t",
+          nearestTarget1.ID," [D=",distance1,"] L=",anchorLen1,"\t",
+          nearestTarget2.ID," [D=",distance2,"] L=",anchorLen2,"\t",
+          exonDeleted,
+          sep="")
+    readsSeen.add(rec.ID)
 
 
 
