@@ -55,12 +55,12 @@ def goodCigar(cigar):
     if(s==None or s<MIN_SOFT_MASK): return False
     return True
 
-#def findBreakpoint(rec):
-#    matchLen=0
-#    for op in rec.CIGAR.ops:
-#        if(op.getOp()=="M"): matchLen=op.getLength()
-#    begin=rec.refPos+rec.CIGAR[0].length
-#    return (begin,matchLen)
+def findBreakpoint(rec):
+    matchLen=0
+    for op in rec.CIGAR.ops:
+        if(op.getOp()=="M"): matchLen=op.getLength()
+    begin=rec.refPos+rec.CIGAR[0].length
+    return (begin,matchLen)
 
 def loadTargets(filename):
     targets=[]
@@ -111,27 +111,7 @@ def longestMatchFromCigar(cigar):
         if(op.advanceInRef()): genomePos+=opLen
     return [readPos,genomePos,longestOpLen]
 
-def longestSoftMask(cigar):
-    L=cigar.length()
-    longestOpIndex=None
-    longestOpLen=0
-    for i in range(L):
-        op=cigar[i]
-        if(op.getOp()!="S"): continue
-        opLen=op.getLength()
-        if(opLen>longestOpLen):
-            longestOpLen=opLen
-            longestOpIndex=i
-    if(longestOpIndex is None): return None
-    readPos=0; genomePos=0
-    for i in range(longestOpIndex):
-        op=cigar[i]
-        opLen=op.getLength()
-        if(op.advanceInQuery()): readPos+=opLen
-        if(op.advanceInRef()): genomePos+=opLen
-    return [readPos,genomePos,longestOpLen]
-
-def findUnaligned(unaligned,genome):
+def findUnaligned(unaligned,genome,revGenome):
     cigar=CigarString(smithWaterman(unaligned,genome,GAP_OPEN,GAP_EXTEND))
     longest=longestMatchFromCigar(cigar)
     if(longest is None): longest=(-1,-1,-1)
@@ -222,29 +202,6 @@ def smithWaterman(seq1,seq2,gapOpen,gapExtend):
     cigar=swapInsDel(cigar) # because my aligner defines cigars differently
     return cigar
 
-def getBowtieMatch(rec):
-    cigar=rec.getCigar()
-    L=cigar.length()
-    for i in range(L):
-        if(cigar[i].getOp()=="M"):
-            return cigar[i]
-
-def getLongestSoftMask(rec):
-    cigar=rec.getCigar()
-    L=cigar.length()
-    longest=None
-    for i in range(L):
-        if(cigar[i].getOp()!="S"): continue
-        if(longest is None or cigar[i].getLength()>longest.getLength()):
-            longest=cigar[i]
-    return longest
-
-def getBreakpoint(match,softMask):
-    if(softMask.interval1.getEnd()<=match.interval1.getBegin()):
-        return (match.interval1.getBegin(),match.interval2.getBegin())
-    else:
-        return (match.interval1.getEnd(),match.interval2.getEnd())
-
 #=========================================================================
 # main()
 #=========================================================================
@@ -254,6 +211,8 @@ if(len(sys.argv)!=3):
 
 # Load genomic sequence
 (Def,genome)=FastaReader.firstSequence(GENOME)
+#revGenome=Translation.reverseComplement(genome)
+revGenome=None
 
 # Load target locations
 targets=loadTargets(targetFile)
@@ -266,33 +225,10 @@ while(True):
     if(rec is None): break
     if(rec.flag_unmapped()): continue
     if(rec.CIGAR.completeMatch()): continue
-    rec.CIGAR.computeIntervals(rec.getRefPos())
-    readLen=len(rec.getSequence())
-    match1=getBowtieMatch(rec)
-    print("Readlen =",readLen)
-    print("Bowtie match = ",match1.interval1.toString(),\
-              match1.interval2.toString(),sep="")
-    softMask=getLongestSoftMask(rec)
-    print("Best softmask= ",softMask.interval1.toString(),\
-              softMask.interval2.toString(),sep="")
-    breakpoint=getBreakpoint(match1,softMask)
-    (breakQuery,breakRef)=breakpoint
-    print("BREAKPOINT   = ",breakQuery," : ",breakRef,sep="")
-    print("=======================================")
-
-    anchorLen1=match1.interval1.getLength()
-    if(anchorLen1<MIN_MATCH): continue
-    
-    continue ###
-
-    #if(not goodCigar(rec.CIGAR)): 
-    #    print(rec.CIGAR.length(),rec.CIGAR.toString(),sep="\t")
-    #if(not goodCigar(rec.CIGAR)): continue
-    #continue ###
-
-    #if(rec.ID in readsSeen): continue
+    if(not goodCigar(rec.CIGAR)): continue
+    if(rec.ID in readsSeen): continue
     #firstAlignStrand="-" if rec.flag_revComp() else "+"
-    #(breakpoint,anchorLen1)=findBreakpoint(rec)
+    (breakpoint,anchorLen1)=findBreakpoint(rec)
     nearestTarget1=findTarget(targets,breakpoint)
     distance1=abs(breakpoint-nearestTarget1.pos)
     if(distance1>MAX_DISTANCE): continue
@@ -302,7 +238,7 @@ while(True):
 
     # Try to align the unaligned part to the other intron
     unaligned=getUnaligned(rec)
-    unalignedPos=findUnaligned(unaligned,genome)
+    unalignedPos=findUnaligned(unaligned,genome,revGenome)
     if(unalignedPos is None): continue
     (pos,strand2,anchorLen2)=unalignedPos
     nearestTarget2=findTarget(targets,pos)
