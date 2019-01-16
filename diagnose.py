@@ -117,7 +117,7 @@ def longestMatchFromCigar(cigar):
 def findUnaligned(unaligned,genome,revGenome):
     #print("Running SmithWaterman on:",unaligned)
     cigar=CigarString(smithWaterman(unaligned,genome,GAP_OPEN,GAP_EXTEND))
-    print("SmithWaterman: ",cigar.toString())
+    #print("SmithWaterman: ",cigar.toString())
     longest=longestMatchFromCigar(cigar)
     if(longest is None): longest=(-1,-1,-1)
     (readPos,genomePos,matchLen)=longest
@@ -126,6 +126,7 @@ def findUnaligned(unaligned,genome,revGenome):
         unaligned=Translation.reverseComplement(unaligned)
         cigar=CigarString(smithWaterman(unaligned,genome,GAP_OPEN,
                                          GAP_EXTEND))
+        print("SmithWaterman: ",cigar.toString())
         longest=longestMatchFromCigar(cigar)
         if(longest is None): return None
         (readPos,genomePos,matchLen)=longest
@@ -167,7 +168,7 @@ def getMatchProportion(seq1,seq2):
     return float(nMatch)/float(nMatch+nMismatch)
 
 def writeFile(defline,seq):
-    filename=TempFilename.generate("fasta")
+    filename=TempFilename.generate(".fasta")
     FASTA_WRITER.writeFasta(defline,seq,filename)
     return filename
 
@@ -187,9 +188,9 @@ def smithWaterman(seq1,seq2,gapOpen,gapExtend):
     cmd=BOOM+"/smith-waterman -q "+MATRIX+" "+str(gapOpen)+" "+\
         str(gapExtend)+" "+file1+" "+file2+" DNA"
     output=Pipe.run(cmd)
-    #print(cmd); print(output); #exit()
-    os.remove(file1)
-    os.remove(file2)
+    print(cmd); print(output); #exit()
+    #os.remove(file1)
+    #os.remove(file2)
     if(not rex.find("CIGAR=(\S+)",output)):
         raise Exception("Can't parse aligner output: "+output)
     cigar=rex[1]
@@ -216,11 +217,11 @@ while(True):
     if(rec.flag_unmapped()): continue
     if(rec.CIGAR.completeMatch()): continue
     if(not goodCigar(rec.CIGAR)): continue
-    print("RAW READ =",rec.seq)
     (breakpoint,anchorLen1)=findBreakpoint(rec)
     nearestTarget1=findTarget(targets,breakpoint)
     distance1=abs(breakpoint-nearestTarget1.pos)
     if(distance1>MAX_DISTANCE): continue
+    print("RAW READ =",rec.seq)
     print("Bowtie:",rec.CIGAR.toString())
     (readPos,genomePos,readSeq,genomeSeq1)=sanityCheckAlignment(rec,genome)
     print("G1=",genomePos,"\tD1=",distance1,"\tL1=",anchorLen1,"\t",\
