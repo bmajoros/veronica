@@ -251,7 +251,7 @@ while(True):
           nearestTarget2.ID," [D=",distance2,"] L=",anchorLen2,"\t",
           strand2,"\t",exonDeleted,
           sep="")
-    readsSeen.add(rec.ID)
+    #readsSeen.add(rec.ID)
 
 
 

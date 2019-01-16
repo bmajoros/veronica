@@ -32,6 +32,7 @@ MIN_SOFT_MASK=16
 MIN_MATCH=16
 MAX_DISTANCE=25
 GENOME="/home/bmajoros/veronica/exon51.fasta"
+TARGETS="/home/bmajoros/veronica/target-sites.txt"
 FASTA_WRITER=FastaWriter()
 
 class Target:
@@ -86,8 +87,10 @@ def getUnaligned(rec):
     seq=rec.seq
     cigar=rec.CIGAR
     if(cigar[0].op=="S"):
+        #print("XXX",seq[:cigar[0].length],sep="\t")
         return seq[:cigar[0].length]
     if(cigar[0].op=="M" and cigar[1].op=="S"):
+        #print("YYY",seq[cigar[0].length:],sep="\t")
         return seq[cigar[0].length:]
     else: raise Exception("internal error")
 
@@ -112,30 +115,27 @@ def longestMatchFromCigar(cigar):
     return [readPos,genomePos,longestOpLen]
 
 def findUnaligned(unaligned,genome,revGenome):
+    #print("Running SmithWaterman on:",unaligned)
     cigar=CigarString(smithWaterman(unaligned,genome,GAP_OPEN,GAP_EXTEND))
+    print("SmithWaterman: ",cigar.toString())
     longest=longestMatchFromCigar(cigar)
     if(longest is None): longest=(-1,-1,-1)
     (readPos,genomePos,matchLen)=longest
     strand="+"
     if(matchLen<MIN_MATCH):
-        cigar=CigarString(smithWaterman(unaligned,revGenome,GAP_OPEN,
+        unaligned=Translation.reverseComplement(unaligned)
+        cigar=CigarString(smithWaterman(unaligned,genome,GAP_OPEN,
                                          GAP_EXTEND))
         longest=longestMatchFromCigar(cigar)
         if(longest is None): return None
         (readPos,genomePos,matchLen)=longest
+        readPos=len(unaligned)-readPos-1 ###
         if(matchLen<MIN_MATCH): return None
-        genome=revGenome
         strand="-"
     if(readPos<0): raise Exception("error")
     readSubseq=unaligned[readPos:(readPos+matchLen)]
     genomeSubseq=genome[genomePos:(genomePos+matchLen)]
-    if(readSubseq!=genomeSubseq):
-        return None
-        #print("UNALIGNED PORTION:")
-        #print(cigar.toString())
-        #print(readSubseq+"\n"+genomeSubseq+"\n==========================")
-        #exit()
-    return (genomePos,strand,matchLen)
+    return (genomePos,strand,matchLen,genomeSubseq)
 
 def getAlignedIntervals(rec):
     readPos=0
@@ -156,13 +156,7 @@ def sanityCheckAlignment(rec,genome):
     (readPos,genomePos)=intervals
     readSeq=rec.getSequence()[readPos.getBegin():readPos.getEnd()]
     genomeSeq=genome[genomePos.getBegin():genomePos.getEnd()]
-    if(readSeq!=genomeSeq and 
-       getMatchProportion(readSeq,genomeSeq)<0.9):
-        #print("MAIN READ ALIGNMENT")
-        #print(readSeq+"\n"+genomeSeq+"\n=============================")
-        #raise Exception("bad alignment")
-        return False
-    return True
+    return (readPos,genomePos,readSeq,genomeSeq)
 
 def getMatchProportion(seq1,seq2):
     nMatch=0
@@ -193,6 +187,7 @@ def smithWaterman(seq1,seq2,gapOpen,gapExtend):
     cmd=BOOM+"/smith-waterman -q "+MATRIX+" "+str(gapOpen)+" "+\
         str(gapExtend)+" "+file1+" "+file2+" DNA"
     output=Pipe.run(cmd)
+    #print(cmd); print(output); #exit()
     os.remove(file1)
     os.remove(file2)
     if(not rex.find("CIGAR=(\S+)",output)):
@@ -208,6 +203,8 @@ if(len(sys.argv)!=3):
     exit(ProgramName.get()+" <read-ID> <sam-file>\n")
 (readID,samFile)=sys.argv[1:]
 
+targets=loadTargets(TARGETS)
+
 # Load genomic sequence
 (Def,genome)=FastaReader.firstSequence(GENOME)
 revGenome=Translation.reverseComplement(genome)
@@ -216,6 +213,35 @@ while(True):
     rec=reader.nextSequence()
     if(rec is None): break
     if(rec.ID!=readID): continue
-    print("found it")
+    if(rec.flag_unmapped()): continue
+    if(rec.CIGAR.completeMatch()): continue
+    if(not goodCigar(rec.CIGAR)): continue
+    print("RAW READ =",rec.seq)
+    (breakpoint,anchorLen1)=findBreakpoint(rec)
+    nearestTarget1=findTarget(targets,breakpoint)
+    distance1=abs(breakpoint-nearestTarget1.pos)
+    if(distance1>MAX_DISTANCE): continue
+    print("Bowtie:",rec.CIGAR.toString())
+    (readPos,genomePos,readSeq,genomeSeq1)=sanityCheckAlignment(rec,genome)
+    print("G1=",genomePos,"\tD1=",distance1,"\tL1=",anchorLen1,"\t",\
+              genomeSeq1,sep="")
+
+    # Try to align the unaligned part to the other intron
+    unaligned=getUnaligned(rec)
+    unalignedPos=findUnaligned(unaligned,genome,revGenome)
+    if(unalignedPos is None): continue
+    (pos,strand2,anchorLen2,genomeSeq2)=unalignedPos
+    nearestTarget2=findTarget(targets,pos)
+    distance2=abs(pos-nearestTarget2.pos)
+    if(distance2>MAX_DISTANCE): continue
+    exonDeleted="EXON_DELETED" if nearestTarget1.intron!=nearestTarget2.intron\
+        else ""
+    print("G2=(",pos,",",pos+anchorLen2,")\tD2=",distance2,"\tL2=",anchorLen2,\
+              "\t",strand2,"\t",genomeSeq2,sep="")
+    #print(rec.getID(),"\t",
+    #      nearestTarget1.ID," [D=",distance1,"] L=",anchorLen1,"\t",
+    #      nearestTarget2.ID," [D=",distance2,"] L=",anchorLen2,"\t",
+    #      strand2,"\t",exonDeleted,
+    #      sep="")
 
 
