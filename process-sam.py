@@ -264,25 +264,29 @@ reader=SamReader(samFile)
 while(True):
     rec=reader.nextSequence()
     if(rec is None): break
+    if(rec.ID in readsSeen): continue
     if(rec.flag_unmapped()): continue
     if(rec.CIGAR.completeMatch()): continue
     rec.CIGAR.computeIntervals(rec.getRefPos())
     readLen=len(rec.getSequence())
     match1=getBowtieMatch(rec)
+    softMask=getLongestSoftMask(rec)
+    breakpoint=getBreakpoint(match1,softMask)
+    (breakQuery,breakRef)=breakpoint
+    anchorLen1=match1.interval1.getLength()
+    if(anchorLen1<MIN_MATCH): continue
+    nearestTarget1=findTarget(targets,breakRef)
+    distance1=abs(breakRef-nearestTarget1.pos)
+    if(distance1>MAX_DISTANCE): continue
+    
     print("Readlen =",readLen)
     print("Bowtie match = ",match1.interval1.toString(),\
               match1.interval2.toString(),sep="")
-    softMask=getLongestSoftMask(rec)
     print("Best softmask= ",softMask.interval1.toString(),\
               softMask.interval2.toString(),sep="")
-    breakpoint=getBreakpoint(match1,softMask)
-    (breakQuery,breakRef)=breakpoint
     print("BREAKPOINT   = ",breakQuery," : ",breakRef,sep="")
     print("=======================================")
-
-    anchorLen1=match1.interval1.getLength()
-    if(anchorLen1<MIN_MATCH): continue
-    
+    readsSeen.add(rec.ID)
     continue ###
 
     #if(not goodCigar(rec.CIGAR)): 
@@ -290,18 +294,14 @@ while(True):
     #if(not goodCigar(rec.CIGAR)): continue
     #continue ###
 
-    #if(rec.ID in readsSeen): continue
     #firstAlignStrand="-" if rec.flag_revComp() else "+"
     #(breakpoint,anchorLen1)=findBreakpoint(rec)
-    nearestTarget1=findTarget(targets,breakpoint)
-    distance1=abs(breakpoint-nearestTarget1.pos)
-    if(distance1>MAX_DISTANCE): continue
 
     # Sanity check: print out the alignment to make sure it really aligns
     if(not sanityCheckAlignment(rec,genome)): continue
 
     # Try to align the unaligned part to the other intron
-    unaligned=getUnaligned(rec)
+    #unaligned=getUnaligned(rec)
     unalignedPos=findUnaligned(unaligned,genome)
     if(unalignedPos is None): continue
     (pos,strand2,anchorLen2)=unalignedPos
@@ -315,7 +315,7 @@ while(True):
           nearestTarget2.ID," [D=",distance2,"] L=",anchorLen2,"\t",
           strand2,"\t",exonDeleted,
           sep="")
-    #readsSeen.add(rec.ID)
+    readsSeen.add(rec.ID)
 
 
 
