@@ -1,3 +1,14 @@
+def getLongestSoftMask(rec):
+    cigar=rec.getCigar()
+    L=cigar.length()
+    longest=None
+    for i in range(L):
+        if(cigar[i].getOp()!="S"): continue
+        if(longest is None or cigar[i].getLength()>longest.getLength()):
+            longest=cigar[i]
+    return longest
+
+
 def findUnaligned_OLD(unaligned,genome,revGenome):
     L=len(genome)
     querylen=len(unaligned)

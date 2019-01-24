@@ -216,7 +216,7 @@ while(True):
     if(rec.ID!=readID): continue
     if(rec.flag_unmapped()): continue
     if(rec.CIGAR.completeMatch()): continue
-    if(not goodCigar(rec.CIGAR)): continue
+    #if(not goodCigar(rec.CIGAR)): continue
     (breakpoint,anchorLen1)=findBreakpoint(rec)
     nearestTarget1=findTarget(targets,breakpoint)
     distance1=abs(breakpoint-nearestTarget1.pos)

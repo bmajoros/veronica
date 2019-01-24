@@ -156,7 +156,7 @@ def findUnaligned(unaligned,genome):
     #    print(cigar.toString())
     #    print(readSubseq+"\n"+genomeSubseq+"\n==========================")
     #    exit()
-    return (genomePos,strand,matchLen)
+    return (genomePos,strand,matchLen,readPos)
 
 def getAlignedIntervals(rec):
     readPos=0
@@ -179,9 +179,9 @@ def sanityCheckAlignment(rec,genome):
     genomeSeq=genome[genomePos.getBegin():genomePos.getEnd()]
     if(readSeq!=genomeSeq and 
        getMatchProportion(readSeq,genomeSeq)<0.9):
-        #print("MAIN READ ALIGNMENT")
-        #print(readSeq+"\n"+genomeSeq+"\n=============================")
-        #raise Exception("bad alignment")
+        print("MAIN READ ALIGNMENT")
+        print(readSeq+"\n"+genomeSeq+"\n=============================")
+        raise Exception("bad alignment")
         return False
     return True
 
@@ -229,17 +229,17 @@ def getBowtieMatch(rec):
         if(cigar[i].getOp()=="M"):
             return cigar[i]
 
-def getLongestSoftMask(rec):
+def getAllSoftmasks(rec,minLen):
     cigar=rec.getCigar()
     L=cigar.length()
-    longest=None
+    softmasks=[]
     for i in range(L):
         if(cigar[i].getOp()!="S"): continue
-        if(longest is None or cigar[i].getLength()>longest.getLength()):
-            longest=cigar[i]
-    return longest
+        if(cigar[i].getLength()<minLen): continue
+        softmasks.append(cigar[i])
+    return softmasks
 
-def getBreakpoint(match,softMask):
+def getMatchBreakpoint(match,softMask):
     if(softMask.interval1.getEnd()<=match.interval1.getBegin()):
         return (match.interval1.getBegin(),match.interval2.getBegin())
     else:
@@ -270,49 +270,80 @@ while(True):
     rec.CIGAR.computeIntervals(rec.getRefPos())
     readLen=len(rec.getSequence())
     match1=getBowtieMatch(rec)
-    softMask=getLongestSoftMask(rec)
-    breakpoint=getBreakpoint(match1,softMask)
-    (breakQuery,breakRef)=breakpoint
     anchorLen1=match1.interval1.getLength()
     if(anchorLen1<MIN_MATCH): continue
-    nearestTarget1=findTarget(targets,breakRef)
-    distance1=abs(breakRef-nearestTarget1.pos)
-    if(distance1>MAX_DISTANCE): continue
-    
+    softmasks=getAllSoftmasks(rec,MIN_MATCH)
+    if(len(softmasks)<1 or len(softmasks)>2): continue
+    bestSoftmask=None; bestDistance1=None; bestDistance2=None
+    bestReadPos1=None; bestRefPos1=None
+    bestAnchorLen2=None; bestReadPos2=None; bestRefPos2=None
+    for softmask in softmasks:
+        breakpoint1=getMatchBreakpoint(match1,softmask)
+        (breakQuery1,breakRef1)=breakpoint1
+        nearestTarget1=findTarget(targets,breakRef1)
+        distance1=abs(breakRef1-nearestTarget1.pos)
+        if(distance1>MAX_DISTANCE): continue
+        unaligned=rec.seq[softmask.interval1.begin:softmask.interval1.end]
+        unalignedPos=findUnaligned(unaligned,genome)
+        if(unalignedPos is None): continue
+        (leftPos,strand2,anchorLen2,leftReadPos)=unalignedPos
+        leftPos+=softmask.interval1.begin
+        if(anchorLen2<MIN_MATCH): continue
+        rightPos=leftPos+anchorLen2
+        rightReadPos=leftReadPos+anchorLen2
+        nearestTarget2left=findTarget(targets,leftPos)
+        distance2left=abs(leftPos-nearestTarget2left.pos)
+        nearestTarget2right=findTarget(targets,rightPos)
+        distance2right=abs(rightPos-nearestTarget2right.pos)
+        nearestTarget2=None; distances=None; breakRef2=None; readPos=None
+        if(distance2left<distance2right):
+            nearestTarget2=nearestTarget2left
+            distance2=distance2left
+            breakRef2=leftPos
+            readPos=leftReadPos
+        else:
+            nearestTarget2=nearestTarget2right
+            distance2=distance2right
+            breakRef2=rightPos
+            readPos=rightReadPos
+        if(distance2>MAX_DISTANCE): continue
+        if(bestSoftmask is None or 
+           #distance1<bestDistance1 or
+           #distance2<bestDistance2 or
+           anchorLen2>bestAnchorLen2):
+            bestSoftmask=softmask; bestAnchorLen2=anchorLen2
+            bestDistance1=distance1; bestDistance2=distance2
+            bestReadPos1=breakQuery1; bestRefPos1=breakRef1
+            bestReadPos2=readPos; bestRefPos2=breakRef2
+    if(bestSoftmask is None): continue
+    print("=======================================")
+    print(rec.ID)
     print("Readlen =",readLen)
     print("Bowtie match = ",match1.interval1.toString(),\
               match1.interval2.toString(),sep="")
-    print("Best softmask= ",softMask.interval1.toString(),\
-              softMask.interval2.toString(),sep="")
-    print("BREAKPOINT   = ",breakQuery," : ",breakRef,sep="")
-    print("=======================================")
-    readsSeen.add(rec.ID)
-    continue ###
-
-    #if(not goodCigar(rec.CIGAR)): 
-    #    print(rec.CIGAR.length(),rec.CIGAR.toString(),sep="\t")
-    #if(not goodCigar(rec.CIGAR)): continue
-    #continue ###
-
-    #firstAlignStrand="-" if rec.flag_revComp() else "+"
-    #(breakpoint,anchorLen1)=findBreakpoint(rec)
-
-    # Sanity check: print out the alignment to make sure it really aligns
-    if(not sanityCheckAlignment(rec,genome)): continue
-
-    # Try to align the unaligned part to the other intron
-    #unaligned=getUnaligned(rec)
-    unalignedPos=findUnaligned(unaligned,genome)
-    if(unalignedPos is None): continue
-    (pos,strand2,anchorLen2)=unalignedPos
-    nearestTarget2=findTarget(targets,pos)
-    distance2=abs(pos-nearestTarget2.pos)
-    if(distance2>MAX_DISTANCE): continue
-    exonDeleted="EXON_DELETED" if nearestTarget1.intron!=nearestTarget2.intron\
-        else ""
+    print("Best softmask= ",bestSoftmask.interval1.toString(),\
+              bestSoftmask.interval2.toString(),sep="")
+    print("BREAKPOINT1   = ",breakQuery1," : ",breakRef1," dist=",
+          bestDistance1," len=",anchorLen1," ",nearestTarget1.ID,sep="")
+    print("BREAKPOINT2   = ",breakRef2," (",strand2,") "," dist=",
+          bestDistance2," len=",anchorLen2," ",nearestTarget2.ID,sep="")
+    print("DELETION LENGTH = ",abs(breakRef2-breakRef1))
+    sanityCheckAlignment(rec,genome) ###
+    concordant="CONCORDANT" if strand2=="+" else "DISCORDANT"
+    exonDeleted=""; 
+    if(nearestTarget1.intron!=nearestTarget2.intron):
+        exonDeleted="EXON_DELETED"
+    elif(strand2=="-"):
+        exonDeleted="?"
+    else:
+        refDelta=abs(bestRefPos2-bestRefPos1)
+        queryDelta=abs(bestReadPos2-bestReadPos1)
+        indelLen=queryDelta-refDelta
+        print("XXX",bestReadPos1,bestReadPos2,bestRefPos1,bestRefPos2,indelLen,sep="\t")
+        exonDeleted="INDEL:"+str(indelLen)
     print(rec.getID(),"\t",
-          nearestTarget1.ID," [D=",distance1,"] L=",anchorLen1,"\t",
-          nearestTarget2.ID," [D=",distance2,"] L=",anchorLen2,"\t",
+          nearestTarget1.ID," [D=",bestDistance1,"] L=",anchorLen1,"\t",
+          nearestTarget2.ID," [D=",bestDistance2,"] L=",anchorLen2,"\t",
           strand2,"\t",exonDeleted,
           sep="")
     readsSeen.add(rec.ID)

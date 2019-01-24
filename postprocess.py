@@ -71,10 +71,12 @@ def findBestExamples(records):
         records[i].print()
 
 def countDeleted(records):
-    n=0
+    n=0; sameStrand=0
     for rec in records:
-        if(rec.deleted): n+=1
-    return n
+        if(rec.deleted): 
+            n+=1
+            if(rec.sameStrands): sameStrand+=1
+    return (n,sameStrand)
 
 def countDiffStrand(records):
     n=0
@@ -123,9 +125,11 @@ with open(filename,"rt") as IN:
 
 # Compute statistics
 n=len(records)
-numDel=countDeleted(records)
+(numDel,numDelSameStrand)=countDeleted(records)
 percentDel=round(float(numDel)/float(n),3)
-print("percent deleted: ",percentDel*100,"% = ",numDel,"/",n,sep="")
+percentDelMinus=round(float(numDel-numDelSameStrand)/float(numDel),3)
+print("percent deleted: ",percentDel*100,"% = ",numDel,"/",n,", ",
+      percentDelMinus*100,"% of which are -",sep="")
 
 diffStrand=countDiffStrand(records)
 percentDiffStrand=round(float(diffStrand)/float(n),3)
