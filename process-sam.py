@@ -31,7 +31,7 @@ GAP_EXTEND=1
 MIN_SOFT_MASK=16
 MIN_MATCH=16
 MAX_DISTANCE=25
-GENOME="/home/bmajoros/veronica/exon51.fasta"
+GENOME="/home/bmajoros/charlie/veronica/exon51.fasta"
 FASTA_WRITER=FastaWriter()
 
 class Target:
@@ -213,6 +213,7 @@ def smithWaterman(seq1,seq2,gapOpen,gapExtend):
     file2=writeFile("genome",seq2)
     cmd=BOOM+"/smith-waterman -q "+MATRIX+" "+str(gapOpen)+" "+\
         str(gapExtend)+" "+file1+" "+file2+" DNA"
+    #print(cmd); quit() ###
     output=Pipe.run(cmd)
     os.remove(file1)
     os.remove(file2)
@@ -235,6 +236,7 @@ def getAllSoftmasks(rec,minLen):
     softmasks=[]
     for i in range(L):
         if(cigar[i].getOp()!="S"): continue
+        #print("YYY",cigar[i].getLength(),minLen)
         if(cigar[i].getLength()<minLen): continue
         softmasks.append(cigar[i])
     return softmasks
@@ -264,6 +266,7 @@ reader=SamReader(samFile)
 while(True):
     rec=reader.nextSequence()
     if(rec is None): break
+    #if(rec.ID!="M03884:303:000000000-C4RM6:1:1101:2260:12012"): continue
     if(rec.ID in readsSeen): continue
     if(rec.flag_unmapped()): continue
     if(rec.CIGAR.completeMatch()): continue
@@ -287,8 +290,9 @@ while(True):
         unalignedPos=findUnaligned(unaligned,genome)
         if(unalignedPos is None): continue
         (leftPos,strand2,anchorLen2,leftReadPos)=unalignedPos
-        leftPos+=softmask.interval1.begin
         if(anchorLen2<MIN_MATCH): continue
+        #print("ZZZ",leftReadPos,"+=",softmask.interval1.begin)
+        leftReadPos+=softmask.interval1.begin
         rightPos=leftPos+anchorLen2
         rightReadPos=leftReadPos+anchorLen2
         nearestTarget2left=findTarget(targets,leftPos)
@@ -296,7 +300,8 @@ while(True):
         nearestTarget2right=findTarget(targets,rightPos)
         distance2right=abs(rightPos-nearestTarget2right.pos)
         nearestTarget2=None; distances=None; breakRef2=None; readPos=None
-        if(distance2left<distance2right):
+        #if(distance2left<distance2right):
+        if(softmask.interval2.begin>=match1.interval2.begin):
             nearestTarget2=nearestTarget2left
             distance2=distance2left
             breakRef2=leftPos
@@ -316,19 +321,20 @@ while(True):
             bestReadPos1=breakQuery1; bestRefPos1=breakRef1
             bestReadPos2=readPos; bestRefPos2=breakRef2
     if(bestSoftmask is None): continue
-    print("=======================================")
-    print(rec.ID)
-    print("Readlen =",readLen)
-    print("Bowtie match = ",match1.interval1.toString(),\
-              match1.interval2.toString(),sep="")
-    print("Best softmask= ",bestSoftmask.interval1.toString(),\
-              bestSoftmask.interval2.toString(),sep="")
-    print("BREAKPOINT1   = ",breakQuery1," : ",breakRef1," dist=",
-          bestDistance1," len=",anchorLen1," ",nearestTarget1.ID,sep="")
-    print("BREAKPOINT2   = ",breakRef2," (",strand2,") "," dist=",
-          bestDistance2," len=",anchorLen2," ",nearestTarget2.ID,sep="")
-    print("DELETION LENGTH = ",abs(breakRef2-breakRef1))
-    sanityCheckAlignment(rec,genome) ###
+    if(False):
+        print("=======================================")
+        print(rec.ID)
+        print("Readlen =",readLen)
+        print("Bowtie match = ",match1.interval1.toString(),\
+                  match1.interval2.toString(),sep="")
+        print("Best softmask= ",bestSoftmask.interval1.toString(),\
+                  bestSoftmask.interval2.toString(),sep="")
+        print("BREAKPOINT1   = ",breakQuery1," : ",breakRef1," dist=",
+              bestDistance1," len=",anchorLen1," ",nearestTarget1.ID,sep="")
+        print("BREAKPOINT2   = ",breakRef2," (",strand2,") "," dist=",
+              bestDistance2," len=",anchorLen2," ",nearestTarget2.ID,sep="")
+        print("DELETION LENGTH = ",abs(breakRef2-breakRef1))
+        sanityCheckAlignment(rec,genome) ###
     concordant="CONCORDANT" if strand2=="+" else "DISCORDANT"
     exonDeleted=""; 
     if(nearestTarget1.intron!=nearestTarget2.intron):
@@ -339,7 +345,8 @@ while(True):
         refDelta=abs(bestRefPos2-bestRefPos1)
         queryDelta=abs(bestReadPos2-bestReadPos1)
         indelLen=queryDelta-refDelta
-        print("XXX",bestReadPos1,bestReadPos2,bestRefPos1,bestRefPos2,indelLen,sep="\t")
+        if(indelLen==0): continue
+        #print("XXX",bestReadPos1,bestReadPos2,bestRefPos1,bestRefPos2,indelLen,sep="\t")
         exonDeleted="INDEL:"+str(indelLen)
     print(rec.getID(),"\t",
           nearestTarget1.ID," [D=",bestDistance1,"] L=",anchorLen1,"\t",

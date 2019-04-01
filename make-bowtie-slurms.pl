@@ -6,8 +6,10 @@ my $name=ProgramName::get();
 die "$name <fastq-dir> <alignment-dir> <working-dir>\n" unless @ARGV==3;
 my ($fastqDir,$alignmentDir,$workingDir)=@ARGV;
 
-system("mkdir bowtie-slurms") unless -e "bowtie-slurms";
-system("rm -f bowtie-slurms/*");
+chop $workingDir if $workingDir=~/\/$/;
+my $slurmDir="$workingDir/bowtie-slurms";
+system("mkdir $slurmDir") unless -e $slurmDir;
+system("rm -f $slurmDir/*");
 
 # Sa51-293T-15_S3_L001__FWD_paired.fq.gz
 open(CMD,">bowtie-commands.sh");
@@ -19,9 +21,10 @@ foreach my $file1 (@files) {
   $file1=~/([^\/]+)__FWD_paired.fq.gz/ || die $file1;
   my $ID=$1;
   my $file2="$fastqDir/${ID}__REV_paired.fq.gz";
-  my $cmd="bowtie2 --local --maxins 12000 -N 0 --mp 100 --rdg 100,100 --rfg 100,100 -x bowtie/exon51 -1 $file1 -2 $file2 > $alignmentDir/$ID.sam";
+#  my $cmd="bowtie2 --local --maxins 12000 -N 0 --mp 100 --rdg 100,100 --rfg 100,100 -x bowtie/exon51 -1 $file1 -2 $file2 > $alignmentDir/$ID.sam";
+  my $cmd="bowtie2 --local -x bowtie/exon51 -1 $file1 -2 $file2 > $alignmentDir/$ID.sam";
 
-  my $slurm="bowtie-slurms/$ID.slurm";
+  my $slurm="$slurmDir/$ID.slurm";
   open(OUT,">$slurm") || die $slurm;
   print OUT "#!/bin/bash
 #
@@ -40,7 +43,7 @@ $cmd
 }
 close(CMD);
 
-open(OUT,">bowtie-slurms/submit.sh") || die;
+open(OUT,">$slurmDir/submit.sh") || die;
 print OUT "#!/bin/tcsh
 ls *.slurm | perl -ne 'print \"sbatch \$_\"' | /bin/tcsh
 ";

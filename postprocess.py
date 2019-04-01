@@ -67,7 +67,9 @@ def findBestExamples(records):
                      x.match1.length * x.match2.length * \
                      (1 if x.deleted else 0),
                  reverse=True)
-    for i in range(100):
+    n=100000
+    if(n>len(records)): n=len(records)
+    for i in range(n):
         records[i].print()
 
 def countDeleted(records):
