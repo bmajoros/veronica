@@ -28,7 +28,7 @@ BOOM="/home/bmajoros/BOOM"
 MATRIX="/home/bmajoros/alignment/matrices/NUC.4.4"
 GAP_OPEN=2
 GAP_EXTEND=1
-MIN_SOFT_MASK=10 #16
+MIN_SOFT_MASK=16 #16
 MIN_MATCH=16 #16 is good, 10 is bad
 MAX_DISTANCE=25
 GENOME="/home/bmajoros/charlie/veronica/exon51.fasta"
@@ -55,13 +55,6 @@ def goodCigar(cigar):
     if(s==None or s<MIN_SOFT_MASK): return False
     return True
 
-#def findBreakpoint(rec):
-#    matchLen=0
-#    for op in rec.CIGAR.ops:
-#        if(op.getOp()=="M"): matchLen=op.getLength()
-#    begin=rec.refPos+rec.CIGAR[0].length
-#    return (begin,matchLen)
-
 def loadTargets(filename):
     targets=[]
     with open(filename,"rt") as IN:
@@ -82,14 +75,14 @@ def findTarget(targets,breakpoint):
             bestDiff=diff
     return bestTarget
 
-def getUnaligned(rec):
-    seq=rec.seq
-    cigar=rec.CIGAR
-    if(cigar[0].op=="S"):
-        return seq[:cigar[0].length]
-    if(cigar[0].op=="M" and cigar[1].op=="S"):
-        return seq[cigar[0].length:]
-    else: raise Exception("internal error")
+#def getUnaligned(rec):
+#    seq=rec.seq
+#    cigar=rec.CIGAR
+#    if(cigar[0].op=="S"):
+#        return seq[:cigar[0].length]
+#    if(cigar[0].op=="M" and cigar[1].op=="S"):
+#        return seq[cigar[0].length:]
+#    else: raise Exception("internal error")
 
 def longestMatchFromCigar(cigar):
     L=cigar.length()
@@ -213,7 +206,6 @@ def smithWaterman(seq1,seq2,gapOpen,gapExtend):
     file2=writeFile("genome",seq2)
     cmd=BOOM+"/smith-waterman -q "+MATRIX+" "+str(gapOpen)+" "+\
         str(gapExtend)+" "+file1+" "+file2+" DNA"
-    #print(cmd); quit() ###
     output=Pipe.run(cmd)
     os.remove(file1)
     os.remove(file2)
@@ -236,7 +228,6 @@ def getAllSoftmasks(rec,minLen):
     softmasks=[]
     for i in range(L):
         if(cigar[i].getOp()!="S"): continue
-        #print("YYY",cigar[i].getLength(),minLen)
         if(cigar[i].getLength()<minLen): continue
         softmasks.append(cigar[i])
     return softmasks
@@ -266,7 +257,6 @@ reader=SamReader(samFile)
 while(True):
     rec=reader.nextSequence()
     if(rec is None): break
-    #if(rec.ID!="M03884:303:000000000-C4RM6:1:1101:2260:12012"): continue
     if(rec.ID in readsSeen): continue
     if(rec.flag_unmapped()): continue
     if(rec.CIGAR.completeMatch()): continue

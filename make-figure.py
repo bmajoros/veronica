@@ -42,9 +42,12 @@ def parseTuple(tup):
     length=parseLen(length)
     return (guide,dist,length)
 
-def incCounts(begin,end,counts):
+def incCounts_OLD(begin,end,counts):
     for i in range(0,begin): counts[i]+=1
     for i in range(end,SEQ_LEN): counts[i]+=1
+
+def incCounts(begin,end,counts):
+    for i in range(begin,end): counts[i]+=1
 
 #=========================================================================
 # main()
@@ -65,11 +68,19 @@ with open(infile,"rt") as IN:
         #if(guide!=LEFT_GUIDE and guide!=RIGHT_GUIDE): continue
         leftBegin=LEFT_TARGET+leftDist
         rightBegin=RIGHT_TARGET+rightDist
-        adjLeft=leftBegin-BEGIN
-        adjRight=rightBegin-BEGIN
-        incCounts(adjLeft,adjRight,counts)
+        #adjLeft=leftBegin-BEGIN
+        #adjRight=rightBegin-BEGIN
+        leftBegin-=BEGIN; rightBegin-=BEGIN
+        leftEnd=leftBegin+leftLen if leftDist>=0 else leftBegin-leftLen
+        rightEnd=rightBegin+rightLen if rightDist>=0 else rightBegin-rightLen
+        if(leftEnd<leftBegin): (leftBegin,leftEnd)=(leftEnd,leftBegin)
+        if(rightEnd<rightBegin): (rightBegin,rightEnd)=(rightEnd,rightBegin)
+        #incCounts(adjLeft-leftLen,adjLeft,counts)
+        #incCounts(adjRight,adjRight+rightLen,counts)
+        incCounts(leftBegin,leftEnd,counts)
+        incCounts(rightBegin,rightEnd,counts)
 
 for i in range(len(counts)):
-    print(i,counts[i],sep="\t")
-    print(i,0,sep="\t")
+    if(counts[i]>0): print(i,counts[i],sep="\t")
+    #print(i,0,sep="\t")
 
