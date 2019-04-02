@@ -42,7 +42,7 @@ class Record:
               "EXON_DELETED" if self.deleted else "",sep="\t")
 
     def parseTuple(self,tuple1):
-        if(not rex.find("(\S+)\s+\[D=(\d+)\]\s+L=(\d+)",tuple1)):
+        if(not rex.find("(\S+)\s+\[D=([\d-]+)\]\s+L=(\d+)",tuple1)):
             raise Exception("Can't parse: "+tuple1)
         return Tuple(rex[1],int(rex[2]),int(rex[3]))
 
@@ -63,9 +63,7 @@ def findBestGuides(records):
 
 def findBestExamples(records):
     records.sort(key=
-                 lambda x: 1/(1+x.match1.distance) * 1/(1+x.match2.distance) * \
-                     x.match1.length * x.match2.length * \
-                     (1 if x.deleted else 0),
+                 lambda x: 1/(1+abs(x.match1.distance)) * 1/(1+abs(x.match2.distance)) * abs(x.match1.length) * abs(x.match2.length) * (1 if x.deleted else 0),
                  reverse=True)
     n=100000
     if(n>len(records)): n=len(records)

@@ -28,8 +28,8 @@ BOOM="/home/bmajoros/BOOM"
 MATRIX="/home/bmajoros/alignment/matrices/NUC.4.4"
 GAP_OPEN=2
 GAP_EXTEND=1
-MIN_SOFT_MASK=16
-MIN_MATCH=16
+MIN_SOFT_MASK=10 #16
+MIN_MATCH=16 #16 is good, 10 is bad
 MAX_DISTANCE=25
 GENOME="/home/bmajoros/charlie/veronica/exon51.fasta"
 FASTA_WRITER=FastaWriter()
@@ -291,16 +291,16 @@ while(True):
         if(unalignedPos is None): continue
         (leftPos,strand2,anchorLen2,leftReadPos)=unalignedPos
         if(anchorLen2<MIN_MATCH): continue
-        #print("ZZZ",leftReadPos,"+=",softmask.interval1.begin)
         leftReadPos+=softmask.interval1.begin
         rightPos=leftPos+anchorLen2
         rightReadPos=leftReadPos+anchorLen2
         nearestTarget2left=findTarget(targets,leftPos)
-        distance2left=abs(leftPos-nearestTarget2left.pos)
+        #distance2left=abs(leftPos-nearestTarget2left.pos)
+        distance2left=leftPos-nearestTarget2left.pos
         nearestTarget2right=findTarget(targets,rightPos)
-        distance2right=abs(rightPos-nearestTarget2right.pos)
+        #distance2right=abs(rightPos-nearestTarget2right.pos)
+        distance2right=rightPos-nearestTarget2right.pos
         nearestTarget2=None; distances=None; breakRef2=None; readPos=None
-        #if(distance2left<distance2right):
         if(softmask.interval2.begin>=match1.interval2.begin):
             nearestTarget2=nearestTarget2left
             distance2=distance2left
@@ -346,7 +346,6 @@ while(True):
         queryDelta=abs(bestReadPos2-bestReadPos1)
         indelLen=queryDelta-refDelta
         if(indelLen==0): continue
-        #print("XXX",bestReadPos1,bestReadPos2,bestRefPos1,bestRefPos2,indelLen,sep="\t")
         exonDeleted="INDEL:"+str(indelLen)
     print(rec.getID(),"\t",
           nearestTarget1.ID," [D=",bestDistance1,"] L=",anchorLen1,"\t",
