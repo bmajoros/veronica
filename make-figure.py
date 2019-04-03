@@ -14,6 +14,7 @@ import sys
 import ProgramName
 from Rex import Rex
 rex=Rex()
+from Interval import Interval
 
 BASE="/data/gersbachlab/bill"
 TARGETS=BASE+"target-sites.txt"
@@ -22,8 +23,8 @@ LEFT_TARGET=4800 #V_50_9  4800    CACCACTCACCTC
 RIGHT_TARGET=6411 #V_51_1  6411    GACCATTTCCCAC
 LEFT_GUIDE="V_50_9"
 RIGHT_GUIDE="V_51_1"
-BEGIN=3800
-END=7411
+BEGIN=0 # 3800
+END=12000 #7411
 SEQ_LEN=END-BEGIN
 
 def parseDist(dist):
@@ -47,7 +48,13 @@ def incCounts_OLD(begin,end,counts):
     for i in range(end,SEQ_LEN): counts[i]+=1
 
 def incCounts(begin,end,counts):
+    #print(begin,end)
     for i in range(begin,end): counts[i]+=1
+
+def pickPoint(interval,target):
+    return interval.begin if \
+        abs(interval.begin-target)<abs(interval.end-target) \
+        else interval.end
 
 #=========================================================================
 # main()
@@ -60,25 +67,19 @@ counts=[0]*SEQ_LEN
 with open(infile,"rt") as IN:
     for line in IN:
         fields=line.rstrip().split("\t")
-        if(len(fields)!=5): continue
-        (read,leftTuple,rightTuple,strand,deleted)=fields
+        if(len(fields)!=7): continue
+        (read,leftTuple,rightTuple,strand,deleted,interval1,interval2)=fields
         if(deleted!="EXON_DELETED"): continue
+        interval1=Interval.parseInt(interval1)
+        interval2=Interval.parseInt(interval2)
         (leftGuide,leftDist,leftLen)=parseTuple(leftTuple)
         (rightGuide,rightDist,rightLen)=parseTuple(rightTuple)
-        #if(guide!=LEFT_GUIDE and guide!=RIGHT_GUIDE): continue
-        leftBegin=LEFT_TARGET+leftDist
-        rightBegin=RIGHT_TARGET+rightDist
-        #adjLeft=leftBegin-BEGIN
-        #adjRight=rightBegin-BEGIN
-        leftBegin-=BEGIN; rightBegin-=BEGIN
-        leftEnd=leftBegin+leftLen if leftDist>=0 else leftBegin-leftLen
-        rightEnd=rightBegin+rightLen if rightDist>=0 else rightBegin-rightLen
-        if(leftEnd<leftBegin): (leftBegin,leftEnd)=(leftEnd,leftBegin)
-        if(rightEnd<rightBegin): (rightBegin,rightEnd)=(rightEnd,rightBegin)
-        #incCounts(adjLeft-leftLen,adjLeft,counts)
-        #incCounts(adjRight,adjRight+rightLen,counts)
-        incCounts(leftBegin,leftEnd,counts)
-        incCounts(rightBegin,rightEnd,counts)
+        #incCounts(interval1.begin-BEGIN,interval1.end-BEGIN,counts)
+        #incCounts(interval2.begin-BEGIN,interval2.end-BEGIN,counts)
+        leftPoint=pickPoint(interval1,LEFT_TARGET)
+        rightPoint=pickPoint(interval2,RIGHT_TARGET)
+        incCounts(leftPoint,leftPoint+1,counts)
+        incCounts(rightPoint,rightPoint+1,counts)
 
 for i in range(len(counts)):
     if(counts[i]>0): print(i,counts[i],sep="\t")

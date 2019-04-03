@@ -24,6 +24,7 @@ rex=Rex()
 import TempFilename
 from CigarString import CigarString
 
+CHECK_ALIGNMENTS=False
 BOOM="/home/bmajoros/BOOM"
 MATRIX="/home/bmajoros/alignment/matrices/NUC.4.4"
 GAP_OPEN=2
@@ -75,15 +76,6 @@ def findTarget(targets,breakpoint):
             bestDiff=diff
     return bestTarget
 
-#def getUnaligned(rec):
-#    seq=rec.seq
-#    cigar=rec.CIGAR
-#    if(cigar[0].op=="S"):
-#        return seq[:cigar[0].length]
-#    if(cigar[0].op=="M" and cigar[1].op=="S"):
-#        return seq[cigar[0].length:]
-#    else: raise Exception("internal error")
-
 def longestMatchFromCigar(cigar):
     L=cigar.length()
     longestOpIndex=None
@@ -130,6 +122,7 @@ def findUnaligned(unaligned,genome):
     if(longest is None): longest=(-1,-1,-1)
     (readPos,genomePos,matchLen)=longest
     strand="+"
+    readSubseq=None; genomeSubseq=None
     if(matchLen<MIN_MATCH):
         unaligned=Translation.reverseComplement(unaligned)
         cigar=CigarString(smithWaterman(unaligned,genome,GAP_OPEN,
@@ -137,19 +130,25 @@ def findUnaligned(unaligned,genome):
         longest=longestMatchFromCigar(cigar)
         if(longest is None): return None
         (readPos,genomePos,matchLen)=longest
+        if(CHECK_ALIGNMENTS):
+            readSubseq=unaligned[readPos:(readPos+matchLen)]
+            genomeSubseq=genome[genomePos:(genomePos+matchLen)]
         readPos=len(unaligned)-readPos-1 ###
         if(matchLen<MIN_MATCH): return None
         strand="-"
+    else:
+        if(CHECK_ALIGNMENTS):
+            readSubseq=unaligned[readPos:(readPos+matchLen)]
+            genomeSubseq=genome[genomePos:(genomePos+matchLen)]
     if(readPos<0): raise Exception("error")
-    #readSubseq=unaligned[readPos:(readPos+matchLen)]
-    #genomeSubseq=genome[genomePos:(genomePos+matchLen)]
-    #if(readSubseq!=genomeSubseq):
-    #    #return None
-    #    print("UNALIGNED PORTION:")
-    #    print(cigar.toString())
-    #    print(readSubseq+"\n"+genomeSubseq+"\n==========================")
-    #    exit()
-    return (genomePos,strand,matchLen,readPos)
+    if(CHECK_ALIGNMENTS):
+        matchProp=getMatchProportion(readSubseq,genomeSubseq)
+        if(matchProp<0.8):
+            print("MISMATCH IN UNALIGNED PORTION:",strand,matchProp)
+            print(cigar.toString())
+            print(readSubseq+"\n"+genomeSubseq+"\n==========================")
+            exit()
+    return (genomePos,strand,matchLen,readPos,genomeSubseq,readSubseq)
 
 def getAlignedIntervals(rec):
     readPos=0
@@ -279,16 +278,15 @@ while(True):
         unaligned=rec.seq[softmask.interval1.begin:softmask.interval1.end]
         unalignedPos=findUnaligned(unaligned,genome)
         if(unalignedPos is None): continue
-        (leftPos,strand2,anchorLen2,leftReadPos)=unalignedPos
+        (leftPos,strand2,anchorLen2,leftReadPos,genomeSubseq,readSubseq)=\
+            unalignedPos
         if(anchorLen2<MIN_MATCH): continue
         leftReadPos+=softmask.interval1.begin
         rightPos=leftPos+anchorLen2
         rightReadPos=leftReadPos+anchorLen2
         nearestTarget2left=findTarget(targets,leftPos)
-        #distance2left=abs(leftPos-nearestTarget2left.pos)
         distance2left=leftPos-nearestTarget2left.pos
         nearestTarget2right=findTarget(targets,rightPos)
-        #distance2right=abs(rightPos-nearestTarget2right.pos)
         distance2right=rightPos-nearestTarget2right.pos
         nearestTarget2=None; distances=None; breakRef2=None; readPos=None
         if(softmask.interval2.begin>=match1.interval2.begin):
@@ -303,8 +301,6 @@ while(True):
             readPos=rightReadPos
         if(distance2>MAX_DISTANCE): continue
         if(bestSoftmask is None or 
-           #distance1<bestDistance1 or
-           #distance2<bestDistance2 or
            anchorLen2>bestAnchorLen2):
             bestSoftmask=softmask; bestAnchorLen2=anchorLen2
             bestDistance1=distance1; bestDistance2=distance2
@@ -337,10 +333,16 @@ while(True):
         indelLen=queryDelta-refDelta
         if(indelLen==0): continue
         exonDeleted="INDEL:"+str(indelLen)
+    interval1=match1.interval2
+    interval2=Interval(leftPos,leftPos+anchorLen2)
+    if(interval1.begin>interval2.begin):
+        (interval1,interval2)=(interval2,interval1)
     print(rec.getID(),"\t",
           nearestTarget1.ID," [D=",bestDistance1,"] L=",anchorLen1,"\t",
           nearestTarget2.ID," [D=",bestDistance2,"] L=",anchorLen2,"\t",
-          strand2,"\t",exonDeleted,
+          strand2,"\t",exonDeleted,"\t",
+          interval1.begin,":",interval1.end,"\t",
+          interval2.begin,":",interval2.end,
           sep="")
     readsSeen.add(rec.ID)
 

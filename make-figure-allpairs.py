@@ -14,17 +14,20 @@ import sys
 import ProgramName
 from Rex import Rex
 rex=Rex()
+from Interval import Interval
 
 BASE="/data/gersbachlab/bill"
-TARGET_SITES=BASE+"target-sites.txt"
+TARGET_SITES=BASE+"/target-sites.txt"
 
 class Record:
-    def __init__(self,read,leftTuple,rightTuple,strand,deleted):
+    def __init__(self,read,leftTuple,rightTuple,strand,deleted,int1,int2):
         self.read=read
         self.leftTuple=leftTuple
         self.rightTuple=rightTuple
         self.strand=strand
         self.deleted=deleted
+        self.interval1=int1
+        self.interval2=int2
     def getGuideDistLen(self):
         (leftGuide,leftDist,leftLen)=parseTuple(self.leftTuple)
         (rightGuide,rightDist,rightLen)=parseTuple(self.rightTuple)
@@ -33,14 +36,13 @@ class Record:
 def getExtents(records,targetSites):
     smallest=None; largest=None
     for rec in records:
-        (leftGuide,leftDist,leftLen,rightGuide,rightDist,rightLen)=\
-            rec.getGuideDistLen()
-        leftTarget=targetSites.get(leftGuide,None)
-        rightTarget=targetSites.get(rightGuide,None)
-        if(leftTarget is None or rightTarget is None):
-            raise Exception("Guide not found")
-        leftBegin=leftTarget+leftDist
-        rightBegin=rightTarget+rightDist
+        m=min(rec.interval1.begin,rec.interval1.end,
+              rec.interval2.begin,rec.interval2.end)
+        if(smallest is None or m<smallest): smallest=m
+        m=max(rec.interval1.begin,rec.interval1.end,
+              rec.interval2.begin,rec.interval2.end)
+        if(largest is None or m>largest): largest=m
+    return (smallest,largest)
 
 def loadTargetSites(filename):
     h={}
@@ -71,6 +73,11 @@ def parseTuple(tup):
 def incCounts(begin,end,counts):
     for i in range(begin,end): counts[i]+=1
 
+def pickPoint(interval,target):
+    return interval.begin if \
+        abs(interval.begin-target)<abs(interval.end-target) \
+        else interval.end
+
 #=========================================================================
 # main()
 #=========================================================================
@@ -86,28 +93,31 @@ records=[]
 with open(infile,"rt") as IN:
     for line in IN:
         fields=line.rstrip().split("\t")
-        if(len(fields)!=5): continue
-        (read,leftTuple,rightTuple,strand,deleted)=fields
+        if(len(fields)!=7): continue
+        (read,leftTuple,rightTuple,strand,deleted,interval1,interval2)=fields
         if(deleted!="EXON_DELETED"): continue
-        rec=Record(read,leftTuple,rightTuple,strand,deleted)
+        interval1=Interval.parseInt(interval1)
+        interval2=Interval.parseInt(interval2)
+        rec=Record(read,leftTuple,rightTuple,strand,deleted,interval1,interval2)
         records.append(rec)
 (BEGIN,seqLen)=getExtents(records,targetSites)
+BEGIN=0
 
 # Compile pileups
 counts=[0]*seqLen
 for rec in records:
-        (leftGuide,leftDist,leftLen,rightGuide,rightDist,rightLen)=\
-            rec.getGuideDistLen()
-        leftTarget=targetSites.get(leftGuide,None)
-        rightTarget=targetSites.get(rightGuide,None)
-        if(leftTarget is None or rightTarget is None):
-            raise Exception("Guide not found")
-        leftBegin=leftTarget+leftDist
-        rightBegin=rightTarget+rightDist
-        adjLeft=leftBegin-BEGIN
-        adjRight=rightBegin-BEGIN
-        incCounts(adjLeft-leftLen,adjLeft,counts)
-        incCounts(adjRight,adjRight+rightLen,counts)
+    (leftGuide,leftDist,leftLen)=parseTuple(rec.leftTuple)
+    (rightGuide,rightDist,rightLen)=parseTuple(rec.rightTuple)
+    leftTarget=targetSites.get(leftGuide,None)
+    rightTarget=targetSites.get(rightGuide,None)
+    if(leftTarget is None or rightTarget is None):
+        raise Exception("Guide not found")
+    #incCounts(rec.interval1.begin-BEGIN,rec.interval1.end-BEGIN,counts)
+    #incCounts(rec.interval2.begin-BEGIN,rec.interval2.end-BEGIN,counts)
+    leftPoint=pickPoint(rec.interval1,leftTarget)
+    rightPoint=pickPoint(rec.interval2,rightTarget)
+    incCounts(leftPoint,leftPoint+1,counts)
+    incCounts(rightPoint,rightPoint+1,counts)
 
 # Print out the pileups
 for i in range(len(counts)):

@@ -14,6 +14,9 @@ import sys
 import ProgramName
 from Rex import Rex
 rex=Rex()
+from Interval import Interval
+
+MIN_DELETION=100
 
 class Tuple:
     def __init__(self,guide,distance,length):
@@ -25,12 +28,26 @@ class Tuple:
             str(self.length)
 
 class Record:
-    def __init__(self,readID,tuple1,tuple2,deleted,strand):
+    def __init__(self,readID,tuple1,tuple2,deleted,strand,int1,int2):
         self.readID=readID
         self.match1=self.parseTuple(tuple1)
         self.match2=self.parseTuple(tuple2)
         self.deleted=deleted=="EXON_DELETED"
         self.sameStrands=strand=="+"
+        self.interval1=self.parseInterval(int1)
+        self.interval2=self.parseInterval(int2)
+    def getDeletionLen(self):
+        L=None
+        if(self.interval1.begin<self.interval2.begin):
+            L=self.interval2.begin-self.interval1.end
+        else:
+            L=self.interval1.begin-self.interval2.end
+        #print(L)
+        return L if L>=0 else 0
+    def parseInterval(self,interval):
+        if(not rex.find("(\d+):(\d+)",interval)):
+            raise Exception("Can't parse interval: "+interval)
+        return Interval(int(rex[1]),int(rex[2]))
     def getKey(self):
         return self.match1.toString()+" "+self.match2.toString()
     def print(self):
@@ -39,8 +56,9 @@ class Record:
         if(match1.guide>match2.guide): (match1,match2)=(match2,match1)
         print(self.readID,match1.toString(),match2.toString(),
               "+" if self.sameStrands else "-",
-              "EXON_DELETED" if self.deleted else "",sep="\t")
-
+              "EXON_DELETED" if self.deleted else "",
+              self.interval1.toString(),self.interval2.toString(),
+              sep="\t")
     def parseTuple(self,tuple1):
         if(not rex.find("(\S+)\s+\[D=([\d-]+)\]\s+L=(\d+)",tuple1)):
             raise Exception("Can't parse: "+tuple1)
@@ -68,7 +86,9 @@ def findBestExamples(records):
     n=100000
     if(n>len(records)): n=len(records)
     for i in range(n):
-        records[i].print()
+        rec=records[i]
+        if(rec.getDeletionLen()<MIN_DELETION): continue
+        rec.print()
 
 def countDeleted(records):
     n=0; sameStrand=0
@@ -116,9 +136,9 @@ seen=set()
 with open(filename,"rt") as IN:
     for line in IN:
         fields=line.rstrip("\n").split("\t")
-        if(len(fields)!=5): raise Exception(line)
-        (readID,tuple1,tuple2,strand,deleted)=fields
-        rec=Record(readID,tuple1,tuple2,deleted,strand)
+        if(len(fields)!=7): raise Exception(line)
+        (readID,tuple1,tuple2,strand,deleted,interval1,interval2)=fields
+        rec=Record(readID,tuple1,tuple2,deleted,strand,interval1,interval2)
         key=rec.getKey()
         if(key not in seen): records.append(rec)
         seen.add(key)
