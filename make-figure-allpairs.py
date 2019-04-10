@@ -71,7 +71,8 @@ def parseTuple(tup):
     return (guide,dist,length)
 
 def incCounts(begin,end,counts):
-    for i in range(begin,end): counts[i]+=1
+    for i in range(begin,end): 
+        if(i>-0 and i<len(counts)): counts[i]+=1
 
 def pickPoint(interval,target):
     return interval.begin if \

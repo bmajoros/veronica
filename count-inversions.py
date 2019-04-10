@@ -130,11 +130,12 @@ if(len(sys.argv)!=2):
 # Load the target site locations and alignment results
 targetSites=loadTargetSites(TARGET_SITES)
 records=loadRecords(filename)
+print(len(records),"records loaded")
 
 # Process records
 for rec in records:
     c=classify(rec,targetSites)
-    if(c is None): continue
-    print(c)
+    if(c is None): print("Ambiguous") #continue
+    else: print(c)
 
 

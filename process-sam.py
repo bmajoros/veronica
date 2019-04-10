@@ -326,7 +326,7 @@ while(True):
     if(nearestTarget1.intron!=nearestTarget2.intron):
         exonDeleted="EXON_DELETED"
     elif(strand2=="-"):
-        exonDeleted="?"
+        exonDeleted="?" # same target, but parts of read are on opposite strands
     else:
         refDelta=abs(bestRefPos2-bestRefPos1)
         queryDelta=abs(bestReadPos2-bestReadPos1)
