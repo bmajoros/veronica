@@ -10,27 +10,22 @@ from builtins import (bytes, dict, int, list, object, range, str, ascii,
    chr, hex, input, next, oct, open, pow, round, super, filter, map, zip)
 # The above imports should allow this program to run in both Python 2 and
 # Python 3.  You might need to update your version of module "future".
-import sys
-import ProgramName
-from FastaReader import FastaReader
+from Rex import Rex
+rex=Rex()
 
-BASE="/home/bmajoros/charlie/veronica"
-#MASKED=BASE+"/exon51.fasta.masked"
-
-#=========================================================================
-# main()
-#=========================================================================
-if(len(sys.argv)!=2):
-    exit(ProgramName.get()+" <masked.fasta>\n")
-(fasta,)=sys.argv[1:]
-
-(defline,seq)=FastaReader.firstSequence(fasta)
-x=0
-for c in seq:
-    #code=1 if c=="N" else 0
-    #print(x,code,sep="\t")
-    if(c=="N"): print(x,1,sep="\t")
-    x+=1
-
-
+# Represents a guide identifier of the form V_50_1, where 50 is the intron 
+# number, and 1 is the identifier of the guide in the intron
+class Guide:
+    def __init__(self,guide):
+        (intron,index)=self.parse(guide)
+        self.intron=intron
+        self.index=index
+    def parse(self,guide):
+        if(not rex.find("V_(\d+)_(\d+)",guide)): 
+            raise Exception("Can't parse guide: "+guide)
+        intron=int(rex[1])
+        index=int(rex[2])
+        return (intron,index)
+    def toString(self):
+        return "V_"+str(self.intron)+"_"+str(self.index)
 

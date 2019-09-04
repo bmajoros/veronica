@@ -12,40 +12,34 @@ from builtins import (bytes, dict, int, list, object, range, str, ascii,
 # Python 3.  You might need to update your version of module "future".
 import sys
 import ProgramName
+from Rex import Rex
+rex=Rex()
 
-def loadFile(filename):
-    points=[]
+def load(filename):
+    h={}
     with open(filename,"rt") as IN:
         for line in IN:
             fields=line.rstrip().split()
-            if(len(fields)!=2): continue
-            (x,y)=(int(fields[0]),int(fields[1]))
-            if(y<5): continue
-            points.append([x,y])
-    return points
+            if(len(fields)!=3): continue
+            (read,guide,matches)=fields
+            h[read]=[guide,matches]
+    return h    
 
 #=========================================================================
 # main()
 #=========================================================================
-if(len(sys.argv)!=5):
-    exit(ProgramName.get()+" <with-guides.txt> <nolib.txt> <mask-width> <min-count>\n")
-(filename1,filename2,bandwidth,minCount)=sys.argv[1:]
-bandwidth=int(bandwidth)
-minCount=int(minCount)
+if(len(sys.argv)!=3):
+    exit(ProgramName.get()+" <fwd-hits.txt> <rev-hits.txt>\n")
+(fwdFile,revFile)=sys.argv[1:]
 
-withGuides=loadFile(filename1)
-nolib=loadFile(filename2)
-inNolib=set()
-for point in nolib:
-    x=point[0]
-    for i in range(x-bandwidth,x+bandwidth+1):
-        inNolib.add(i)
-for point in withGuides:
-    (x,y)=point
-    if(y>=minCount and x not in inNolib):
-        print(x,y,sep="\t")
-
-
-
+fwd=load(fwdFile)
+rev=load(revFile)
+fwdKeys=fwd.keys()
+for key in fwdKeys:
+    (fwdGuide,fwdMatches)=fwd[key]
+    revRec=rev.get(key,None)
+    if(revRec is None): continue
+    (revGuide,revMatches)=revRec
+    print(fwdGuide,revGuide,sep="\t")
 
 

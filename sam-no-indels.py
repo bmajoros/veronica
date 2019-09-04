@@ -12,40 +12,22 @@ from builtins import (bytes, dict, int, list, object, range, str, ascii,
 # Python 3.  You might need to update your version of module "future".
 import sys
 import ProgramName
-
-def loadFile(filename):
-    points=[]
-    with open(filename,"rt") as IN:
-        for line in IN:
-            fields=line.rstrip().split()
-            if(len(fields)!=2): continue
-            (x,y)=(int(fields[0]),int(fields[1]))
-            if(y<5): continue
-            points.append([x,y])
-    return points
+from SamReader import SamReader
+from SamRecord import SamRecord
+from CigarString import CigarString
 
 #=========================================================================
 # main()
 #=========================================================================
-if(len(sys.argv)!=5):
-    exit(ProgramName.get()+" <with-guides.txt> <nolib.txt> <mask-width> <min-count>\n")
-(filename1,filename2,bandwidth,minCount)=sys.argv[1:]
-bandwidth=int(bandwidth)
-minCount=int(minCount)
+if(len(sys.argv)!=2):
+    exit(ProgramName.get()+" <infile.sam>\n")
+(infile,)=sys.argv[1:]
 
-withGuides=loadFile(filename1)
-nolib=loadFile(filename2)
-inNolib=set()
-for point in nolib:
-    x=point[0]
-    for i in range(x-bandwidth,x+bandwidth+1):
-        inNolib.add(i)
-for point in withGuides:
-    (x,y)=point
-    if(y>=minCount and x not in inNolib):
-        print(x,y,sep="\t")
-
-
-
-
+reader=SamReader(infile)
+while(True):
+    pair=reader.nextSeqAndText()
+    if(pair is None): break
+    (rec,line)=pair
+    if(rec.getCigar().completeMatch()): print(line,end="")
+    
 

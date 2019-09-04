@@ -12,40 +12,39 @@ from builtins import (bytes, dict, int, list, object, range, str, ascii,
 # Python 3.  You might need to update your version of module "future".
 import sys
 import ProgramName
+from Translation import Translation
+from Rex import Rex
+rex=Rex()
 
-def loadFile(filename):
-    points=[]
+BASE="/home/bmajoros/charlie/veronica/newdata"
+GUIDEPAIRS=BASE+"/guides.txt"
+
+def loadGuides(filename):
+    guides50=[]; guides51=[]
     with open(filename,"rt") as IN:
         for line in IN:
             fields=line.rstrip().split()
             if(len(fields)!=2): continue
-            (x,y)=(int(fields[0]),int(fields[1]))
-            if(y<5): continue
-            points.append([x,y])
-    return points
+            (ID,seq)=fields
+            seq=seq.upper()
+            guide=[ID,seq]
+            if(not rex.find("V_(\d+)_\d+",ID)):
+                raise Exception("Can't parse guide ID"+ID)
+            if(rex[1]=="50"): guides50.append(guide)
+            else: guides51.append(guide)
+    return (guides50,guides51)
 
 #=========================================================================
 # main()
 #=========================================================================
-if(len(sys.argv)!=5):
-    exit(ProgramName.get()+" <with-guides.txt> <nolib.txt> <mask-width> <min-count>\n")
-(filename1,filename2,bandwidth,minCount)=sys.argv[1:]
-bandwidth=int(bandwidth)
-minCount=int(minCount)
-
-withGuides=loadFile(filename1)
-nolib=loadFile(filename2)
-inNolib=set()
-for point in nolib:
-    x=point[0]
-    for i in range(x-bandwidth,x+bandwidth+1):
-        inNolib.add(i)
-for point in withGuides:
-    (x,y)=point
-    if(y>=minCount and x not in inNolib):
-        print(x,y,sep="\t")
-
-
-
+(guides50,guides51)=loadGuides(GUIDEPAIRS)
+for guide1 in guides50:
+    (ID1,seq1)=guide1
+    for guide2 in guides51:
+        (ID2,seq2)=guide2
+        #seq2=Translation.reverseComplement(seq2)
+        concatID=ID1+"-"+ID2
+        concatSeq=seq1+seq2
+        print(">"+concatID+"\n"+concatSeq)
 
 

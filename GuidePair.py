@@ -10,27 +10,17 @@ from builtins import (bytes, dict, int, list, object, range, str, ascii,
    chr, hex, input, next, oct, open, pow, round, super, filter, map, zip)
 # The above imports should allow this program to run in both Python 2 and
 # Python 3.  You might need to update your version of module "future".
-import sys
-import ProgramName
-from FastaReader import FastaReader
+from Guide import Guide
 
-BASE="/home/bmajoros/charlie/veronica"
-#MASKED=BASE+"/exon51.fasta.masked"
-
-#=========================================================================
-# main()
-#=========================================================================
-if(len(sys.argv)!=2):
-    exit(ProgramName.get()+" <masked.fasta>\n")
-(fasta,)=sys.argv[1:]
-
-(defline,seq)=FastaReader.firstSequence(fasta)
-x=0
-for c in seq:
-    #code=1 if c=="N" else 0
-    #print(x,code,sep="\t")
-    if(c=="N"): print(x,1,sep="\t")
-    x+=1
+# Represents a pair of guide identifiers of the form V_50_1, and their count
+class GuidePair:
+    def __init__(self,count,guideID1,guideID2):
+        self.count=int(count)
+        self.guide1=Guide(guideID1)
+        self.guide2=Guide(guideID2)
+    def toString(self):
+        return self.guide1.toString()+" "+self.guide2.toString+" "+\
+            str(self.count)
 
 
 
