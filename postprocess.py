@@ -15,6 +15,7 @@ import ProgramName
 from Rex import Rex
 rex=Rex()
 from Interval import Interval
+import gzip
 
 MIN_DELETION=100
 
@@ -104,7 +105,16 @@ def countDiffStrand(records):
         if(not rec.sameStrands): n+=1
     return n
 
-def countGuidePairs(records):
+def computeNorm(pairKey,normFactors):
+    if(not rex.find("(\S+) (\S+)",pairKey)):
+        raise Exception("Can't parse pair key: "+pairKey)
+    (id1,id2)=(rex[1],rex[2])
+    norm1=normFactors[id1]
+    norm2=normFactors[id2]
+    norm=1.0/(1-(1-norm1)*(1-norm2))
+    return norm
+
+def countGuidePairs(records,normFactors):
     pairCounts={}
     for rec in records:
         if(not rec.deleted): continue
@@ -117,31 +127,51 @@ def countGuidePairs(records):
     array=[]
     for key in pairCounts.keys():
         count=pairCounts[key]
+        norm=computeNorm(key,normFactors)
+        count*=norm
         array.append([count,key])
     array.sort(key=lambda x: -x[0])
     for rec in array:
-        print(rec[0],rec[1],sep="\t")
+        (count,key)=rec
+        norm=computeNorm(key,normFactors)
+        print(round(count,1),round(norm,2),key,sep="\t")
 
+def readNormFactors(filename):
+    factors={}
+    with open(filename,"rt") as IN:
+        for line in IN:
+            fields=line.rstrip().split()
+            if(len(fields)!=3): continue
+            (ID,pos,P)=fields
+            P=float(P)
+            factors[ID]=P
+    return factors
 
 #=========================================================================
 # main()
 #=========================================================================
-if(len(sys.argv)!=2):
-    exit(ProgramName.get()+" <outputs.txt>\n")
-(filename,)=sys.argv[1:]
+if(len(sys.argv)!=3):
+    exit(ProgramName.get()+" <processed.txt> <norm-factors.txt>\n")
+(filename,normFile)=sys.argv[1:]
+
+# Read normalization factors
+normFactors=readNormFactors(normFile)
 
 # Read records
 records=[]
 seen=set()
-with open(filename,"rt") as IN:
-    for line in IN:
-        fields=line.rstrip("\n").split("\t")
-        if(len(fields)!=7): raise Exception(line)
-        (readID,tuple1,tuple2,strand,deleted,interval1,interval2)=fields
-        rec=Record(readID,tuple1,tuple2,deleted,strand,interval1,interval2)
-        key=rec.getKey()
-        if(key not in seen): records.append(rec)
-        seen.add(key)
+IN=gzip.open(filename,"rt") if rex.find(".gz$",filename) \
+    else open(filename,"rt")
+#with open(filename,"rt") as IN:
+for line in IN:
+    fields=line.rstrip("\n").split("\t")
+    if(len(fields)!=7): raise Exception(line)
+    (readID,tuple1,tuple2,strand,deleted,interval1,interval2)=fields
+    rec=Record(readID,tuple1,tuple2,deleted,strand,interval1,interval2)
+    key=rec.getKey()
+    if(key not in seen): records.append(rec)
+    seen.add(key)
+IN.close()
 
 # Compute statistics
 n=len(records)
@@ -156,7 +186,7 @@ percentDiffStrand=round(float(diffStrand)/float(n),3)
 print("percent different strand: ",percentDiffStrand*100,"% = ",
       diffStrand,"/",n,sep="")
 
-countGuidePairs(records)
+countGuidePairs(records,normFactors)
 
 findBestExamples(records)
 

@@ -31,7 +31,7 @@ GAP_OPEN=2
 GAP_EXTEND=1
 MIN_SOFT_MASK=16 #16
 MIN_MATCH=16 #16 is good, 10 is bad
-MAX_DISTANCE=25
+MAX_DISTANCE=10 # was 25
 GENOME="/home/bmajoros/charlie/veronica/exon51.fasta"
 FASTA_WRITER=FastaWriter()
 
