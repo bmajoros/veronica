@@ -17,6 +17,7 @@ rex=Rex()
 from Interval import Interval
 import gzip
 
+MAX_D=10
 MIN_DELETION=100
 
 class Tuple:
@@ -64,8 +65,10 @@ class Record:
         if(not rex.find("(\S+)\s+\[D=([\d-]+)\]\s+L=(\d+)",tuple1)):
             raise Exception("Can't parse: "+tuple1)
         return Tuple(rex[1],int(rex[2]),int(rex[3]))
+    def getLargestDistance(self):
+        return max(abs(self.match1.distance),abs(self.match2.distance))
 
-def findBestGuides(records):
+def findBestGuides(records,normFactors):
     counts={}
     for rec in records:
         if(not rec.deleted): continue
@@ -74,11 +77,14 @@ def findBestGuides(records):
     array=[]
     for key in counts.keys():
         count=counts[key]
+        norm=computeNorm(key,normFactors)
+        count*=norm
         array.append([key,count])
     array.sort(key=lambda x: x[1],reverse=True)
     for elem in array:
         (guide,count)=elem
-        print(guide,count,sep="\t")
+        norm=computeNorm(guide,normFactors)
+        print(round(count,1),round(norm,2),guide,sep="\t")
 
 def findBestExamples(records):
     records.sort(key=
@@ -105,13 +111,17 @@ def countDiffStrand(records):
         if(not rec.sameStrands): n+=1
     return n
 
-def computeNorm(pairKey,normFactors):
+def computeNormForPair(pairKey,normFactors):
     if(not rex.find("(\S+) (\S+)",pairKey)):
         raise Exception("Can't parse pair key: "+pairKey)
     (id1,id2)=(rex[1],rex[2])
     norm1=normFactors[id1]
     norm2=normFactors[id2]
     norm=1.0/(1-(1-norm1)*(1-norm2))
+    return norm
+
+def computeNorm(guideID,normFactors):
+    norm=1.0/normFactors[guideID]
     return norm
 
 def countGuidePairs(records,normFactors):
@@ -127,13 +137,13 @@ def countGuidePairs(records,normFactors):
     array=[]
     for key in pairCounts.keys():
         count=pairCounts[key]
-        norm=computeNorm(key,normFactors)
+        norm=computeNormForPair(key,normFactors)
         count*=norm
         array.append([count,key])
     array.sort(key=lambda x: -x[0])
     for rec in array:
         (count,key)=rec
-        norm=computeNorm(key,normFactors)
+        norm=computeNormForPair(key,normFactors)
         print(round(count,1),round(norm,2),key,sep="\t")
 
 def readNormFactors(filename):
@@ -162,12 +172,12 @@ records=[]
 seen=set()
 IN=gzip.open(filename,"rt") if rex.find(".gz$",filename) \
     else open(filename,"rt")
-#with open(filename,"rt") as IN:
 for line in IN:
     fields=line.rstrip("\n").split("\t")
     if(len(fields)!=7): raise Exception(line)
     (readID,tuple1,tuple2,strand,deleted,interval1,interval2)=fields
     rec=Record(readID,tuple1,tuple2,deleted,strand,interval1,interval2)
+    if(rec.getLargestDistance()>MAX_D): continue
     key=rec.getKey()
     if(key not in seen): records.append(rec)
     seen.add(key)
@@ -178,19 +188,19 @@ n=len(records)
 (numDel,numDelSameStrand)=countDeleted(records)
 percentDel=round(float(numDel)/float(n),3)
 percentDelMinus=round(float(numDel-numDelSameStrand)/float(numDel),3)
-print("percent deleted: ",percentDel*100,"% = ",numDel,"/",n,", ",
-      percentDelMinus*100,"% of which are -",sep="")
+#print("percent deleted: ",percentDel*100,"% = ",numDel,"/",n,", ",
+#      percentDelMinus*100,"% of which are -",sep="")
 
 diffStrand=countDiffStrand(records)
 percentDiffStrand=round(float(diffStrand)/float(n),3)
-print("percent different strand: ",percentDiffStrand*100,"% = ",
-      diffStrand,"/",n,sep="")
+#print("percent different strand: ",percentDiffStrand*100,"% = ",
+#      diffStrand,"/",n,sep="")
 
 countGuidePairs(records,normFactors)
 
-findBestExamples(records)
+#findBestExamples(records)
 
-findBestGuides(records)
+findBestGuides(records,normFactors)
 
 # M03884:303:000000000-C4RM6:1:1111:23549:4101	V_51_28 [D=9] L=90	V_50_29 [D=11] L=60	EXON_DELETED
 
