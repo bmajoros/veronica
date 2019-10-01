@@ -1,0 +1,59 @@
+#!/usr/bin/env python
+#=========================================================================
+# This is OPEN SOURCE SOFTWARE governed by the Gnu General Public
+# License (GPL) version 3, as described at www.opensource.org.
+# Author: William H. Majoros (bmajoros@alumni.duke.edu)
+#=========================================================================
+from __future__ import (absolute_import, division, print_function, 
+   unicode_literals, generators, nested_scopes, with_statement)
+from builtins import (bytes, dict, int, list, object, range, str, ascii,
+   chr, hex, input, next, oct, open, pow, round, super, filter, map, zip)
+# The above imports should allow this program to run in both Python 2 and
+# Python 3.  You might need to update your version of module "future".
+import sys
+import ProgramName
+from FastqReader import FastqReader
+from Rex import Rex
+rex=Rex()
+from Translation import Translation
+
+MIN_QUALITY=30
+GUIDES_FILE="/home/bmajoros/charlie/veronica/long-guide-sequences.txt"
+GUIDE1_BEGIN=30
+GUIDE2_BEGIN=125
+
+def loadGuides(filename):
+    guides={}
+    with open(filename,"rt") as IN:
+        for line in IN:
+            fields=line.rstrip().split()
+            if(len(fields)<7): continue
+            (ID,chrom,begin,end,strand,intron,seq)=fields
+            #print(ID,seq.upper(),sep="\t")
+            guides[seq]=ID
+    return guides
+
+#=========================================================================
+# main()
+#=========================================================================
+if(len(sys.argv)!=2):
+    exit(ProgramName.get()+" <infile.fastq.gz>\n")
+(infile,)=sys.argv[1:]
+
+shouldRev=rex.find("R2",infile)
+begin=GUIDE1_BEGIN if not shouldRev else GUIDE2_BEGIN
+end=begin+21
+guides=loadGuides(GUIDES_FILE)
+reader=FastqReader(infile)
+while(True):
+    rec=reader.nextSequence()
+    if(rec is None): break
+    (readID,seq,qual,pair)=rec
+    guideSeq=seq[begin:end]
+    qualSeq=qual[begin:end]
+    if(shouldRev): guideSeq=Translation.reverseComplement(guideSeq)
+    if(min(qualSeq)<MIN_QUALITY): continue
+    if(len(guideSeq)!=21): raise Exception("Guide is wrong length")
+    ID=guides.get(guideSeq,None)
+    if(ID is not None): print(ID,readID,sep="\t")
+
