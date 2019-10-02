@@ -75,5 +75,7 @@ while(True):
     if(len(guideSeq)!=21): raise Exception("Guide is wrong length")
     ID=guides.get(guideSeq,None)
     if(ID is None): ID=fuzzyMatch(guideSeq,guideStrings,guides)
-    if(ID is not None): print(ID,readID,sep="\t")
+    #if(ID is not None): print(ID,readID,sep="\t")
+    score=round(sum(qualSeq)/len(qualSeq),2)
+    if(ID is not None): print(ID,score,sep="\t")
 
