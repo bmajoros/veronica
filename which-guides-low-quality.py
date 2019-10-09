@@ -58,12 +58,19 @@ if(len(sys.argv)!=3):
 MIN_QUALITY=int(MIN_QUALITY)
 
 shouldRev=rex.find("R2",infile)
+discardIntron50=shouldRev
+discardIntron51=not shouldRev
 begin=GUIDE1_BEGIN if not shouldRev else GUIDE2_BEGIN
 end=begin+21
 guides=loadGuides(GUIDES_FILE)
 guideStrings=guides.keys()
 reader=FastqReader(infile)
+sums={}; sumSquares={}; sampleSizes={}
+#MAX_SEQS=10000
+#numSeen=0
 while(True):
+    #numSeen+=1
+    #if(numSeen>MAX_SEQS): break
     rec=reader.nextSequence()
     if(rec is None): break
     (readID,seq,qual,rawQual,pair)=rec
@@ -76,6 +83,26 @@ while(True):
     ID=guides.get(guideSeq,None)
     if(ID is None): ID=fuzzyMatch(guideSeq,guideStrings,guides)
     #if(ID is not None): print(ID,readID,sep="\t")
-    score=round(sum(qualSeq)/len(qualSeq),2)
-    if(ID is not None): print(ID,score,sep="\t")
+    #score=round(sum(qualSeq)/len(qualSeq),2)
+    qualSum=sum(qualSeq)
+    qualSumSquared=sum([x*x for x in qualSeq])
+    if(ID is not None): #print(ID,score,sep="\t")
+        if(discardIntron50 and rex.find("V_50",ID) or
+           discardIntron51 and rex.find("V_51",ID)): continue
+        #array=arrays.get(ID,None)
+        #if(array is None): array=arrays[ID]=[]
+        #array.extend(qualSeq)
+        sums[ID]=sums.get(ID,0)+qualSum
+        sumSquares[ID]=sumSquares.get(ID,0)+qualSumSquared
+        sampleSizes[ID]=sampleSizes.get(ID,0)+len(qualSeq)
+IDs=sums.keys()
+for ID in IDs:
+    sumX=sums[ID]
+    sumXX=sumSquares[ID]
+    n=sampleSizes[ID]
+    meanX=sumX/n
+    #print(sumX,n,sumXX)
+    varX=None if n<2 else (sumXX-sumX*sumX/n)/(n-1)
+    print(ID,round(meanX,1),round(varX,1),n,sep="\t")
+
 
