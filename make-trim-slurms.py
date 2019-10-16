@@ -17,7 +17,8 @@ from SlurmWriter import SlurmWriter
 from Rex import Rex
 rex=Rex()
 
-ROOT="/home/bmajoros/charlie/veronica/newdata"
+#ROOT="/home/bmajoros/charlie/veronica/newdata"
+ROOT="/home/bmajoros/charlie/veronica/data4"
 MEM=50000
 NICE=500
 jobName="TRIM"

@@ -77,14 +77,15 @@ def findBestGuides(records,normFactors):
     array=[]
     for key in counts.keys():
         count=counts[key]
+        raw=count
         norm=computeNorm(key,normFactors)
         count*=norm
-        array.append([key,count])
+        array.append([key,count,raw])
     array.sort(key=lambda x: x[1],reverse=True)
     for elem in array:
-        (guide,count)=elem
+        (guide,count,raw)=elem
         norm=computeNorm(guide,normFactors)
-        print(round(count,1),round(norm,2),guide,sep="\t")
+        print("GUIDE",round(count,1),round(norm,2),guide,raw,sep="\t")
 
 def findBestExamples(records):
     records.sort(key=
@@ -137,14 +138,15 @@ def countGuidePairs(records,normFactors):
     array=[]
     for key in pairCounts.keys():
         count=pairCounts[key]
+        raw=count
         norm=computeNormForPair(key,normFactors)
         count*=norm
-        array.append([count,key])
+        array.append([count,key,raw])
     array.sort(key=lambda x: -x[0])
     for rec in array:
-        (count,key)=rec
+        (count,key,raw)=rec
         norm=computeNormForPair(key,normFactors)
-        print(round(count,1),round(norm,2),key,sep="\t")
+        print("PAIR",round(count,1),round(norm,2),key,raw,sep="\t")
 
 def readNormFactors(filename):
     factors={}
