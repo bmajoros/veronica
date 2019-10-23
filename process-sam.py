@@ -240,9 +240,10 @@ def getMatchBreakpoint(match,softMask):
 #=========================================================================
 # main()
 #=========================================================================
-if(len(sys.argv)!=3):
-    exit(ProgramName.get()+" <filename.sam> <target-sites.txt>\n")
-(samFile,targetFile)=sys.argv[1:]
+if(len(sys.argv)!=4):
+    exit(ProgramName.get()+" <filename.sam> <target-sites.txt> <deduplicate:0/1>\n")
+(samFile,targetFile,dedup)=sys.argv[1:]
+dedup=True if dedup==1 else False
 
 # Load genomic sequence
 (Def,genome)=FastaReader.firstSequence(GENOME)
@@ -259,6 +260,7 @@ while(True):
     if(rec.ID in readsSeen): continue
     if(rec.flag_unmapped()): continue
     if(rec.CIGAR.completeMatch()): continue
+    if(dedup and rec.flag_PCRduplicate()): continue
     rec.CIGAR.computeIntervals(rec.getRefPos())
     readLen=len(rec.getSequence())
     match1=getBowtieMatch(rec)

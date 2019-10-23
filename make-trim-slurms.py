@@ -18,7 +18,8 @@ from Rex import Rex
 rex=Rex()
 
 #ROOT="/home/bmajoros/charlie/veronica/newdata"
-ROOT="/home/bmajoros/charlie/veronica/data4"
+#ROOT="/home/bmajoros/charlie/veronica/data4"
+ROOT="/home/bmajoros/charlie/veronica/data3"
 MEM=50000
 NICE=500
 jobName="TRIM"
