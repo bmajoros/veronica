@@ -17,7 +17,7 @@ from Rex import Rex
 rex=Rex()
 from Translation import Translation
 
-MAX_MISMATCH=5 # No two guides differ by fewer than 7 positions
+MAX_MISMATCH=2 #5 # No two guides differ by fewer than 7 positions
 GUIDES_FILE="/home/bmajoros/charlie/veronica/long-guide-sequences.txt"
 GUIDE1_BEGIN=30
 GUIDE2_BEGIN=125
@@ -30,6 +30,7 @@ def loadGuides(filename):
             if(len(fields)<7): continue
             (ID,chrom,begin,end,strand,intron,seq)=fields
             #print(ID,seq.upper(),sep="\t")
+            seq=seq.upper()
             guides[seq]=ID
     return guides
 
@@ -43,6 +44,12 @@ def fuzzyMatch(guideSeq,guideStrings,guides):
     bestGuide=None; bestMismatch=None
     for guide in guideStrings:
         mis=countMismatches(guideSeq,guide)
+        if(mis<=MAX_MISMATCH and mis>0 and mis==bestMismatch): 
+            print("Ambiguous mismatch:",mis,bestMismatch)
+            print(guideSeq)
+            print(guide,guides[guide])
+            print(bestGuide,guides[bestGuide])
+            raise Exception()
         if(bestMismatch is None or mis<bestMismatch):
             bestGuide=guide
             bestMismatch=mis

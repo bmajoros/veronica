@@ -22,7 +22,8 @@ def loadGuides(filename):
             fields=line.rstrip().split()
             if(len(fields)<7): continue
             (ID,chrom,begin,end,strand,intron,seq)=fields
-            #print(ID,seq.upper(),sep="\t")
+            seq=seq.upper()
+            #print(ID,seq,sep="\t")
             guides[seq]=ID
     return guides
 
